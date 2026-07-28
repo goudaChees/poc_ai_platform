@@ -23,6 +23,9 @@ x-airflow-common: &airflow-common
     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     OCR_MEDIA_ROOT: /opt/airflow/media
 
+    QDRANT_URL: http://qdrant:6333
+    QDRANT_COLLECTION_NAME: document_chunks
+
     BOARD_DB_HOST: postgres
     BOARD_DB_PORT: "5432"
     BOARD_DB_NAME: ${POSTGRES_DB}
@@ -123,6 +126,17 @@ services:
 
     restart: unless-stopped
 
+  qdrant:
+    image: qdrant/qdrant:v1.18.1
+    container_name: qdrant
+
+    ports:
+      - "6333:6333"
+
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+    restart: unless-stopped
 
   airflow-init:
     <<: *airflow-common
@@ -195,6 +209,8 @@ services:
 
 
 volumes:
+  qdrant_data:
+  
   board_pgdata:
     external: true
     name: board-poc_board_pgdata

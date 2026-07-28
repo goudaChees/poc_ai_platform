@@ -15,6 +15,7 @@ TASK_STAGE_MAP = {
     "run_ocr": "OCR",
     "save_result": "OCR",
     "chunking": "CHUNKING",
+    "embedding": "EMBEDDING",
 }
 
 def notify_pipeline_failed(context):
