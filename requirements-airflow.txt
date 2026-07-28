@@ -1,0 +1,10 @@
+PyYAML==6.0.2
+paddlepaddle==3.2.2
+paddleocr==3.7.0
+paddlex==3.7.2
+opencv-python-headless
+PyMuPDF
+pdf2image
+psycopg2-binary
+requests
+apache-airflow-providers-fab==2.4.1

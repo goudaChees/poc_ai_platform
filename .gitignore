@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# Airflow
+airflow.db
+airflow.cfg
+
+logs/
+tmp/
+
+# Conda
+.conda/
+.env
+
+# VSCode
+.vscode/
+
+# macOS
+.DS_Store
