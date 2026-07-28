@@ -8,3 +8,4 @@ pdf2image
 psycopg2-binary
 requests
 apache-airflow-providers-fab==2.4.1
+qdrant-client[fastembed]==1.18.0
