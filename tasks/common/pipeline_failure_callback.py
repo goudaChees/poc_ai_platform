@@ -16,6 +16,7 @@ TASK_STAGE_MAP = {
     "save_result": "OCR",
     "chunking": "CHUNKING",
     "embedding": "EMBEDDING",
+    "qdrant_index": "QDRANT_INDEX",
 }
 
 def notify_pipeline_failed(context):

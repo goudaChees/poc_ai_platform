@@ -8,6 +8,8 @@ from tasks.ocr.ocr_run import run_ocr as run_ocr_service
 from tasks.ocr.ocr_save_result import save_result as save_result_service
 from tasks.chunking.chunk_document import chunk_document as chunk_document_service
 from tasks.embedding.embed_chunks import embed_chunks as embed_chunks_service
+from tasks.qdrant.index_embeddings import index_embeddings as index_embeddings_service
+
 
 @dag(
     dag_id="ocr_pipeline",
@@ -65,6 +67,13 @@ def ocr_pipeline():
 
         return embed_chunks_service(chunk_info)
 
+    @task(on_failure_callback=notify_pipeline_failed)
+    def qdrant_index(embedding_info):
+        print("==== QDRANT INDEX START ====")
+        print(f"embedding_info : {embedding_info}")
+
+        return index_embeddings_service(embedding_info)
+
 
     file_info  = check_file()
 
@@ -78,7 +87,7 @@ def ocr_pipeline():
 
     embedding_info = embedding(chunk_info)
 
-    # index_info = qdrant_index(embedding_info)
+    index_info = qdrant_index(embedding_info)
 
     # validation_info = rag_validation(index_info)
 
