@@ -11,6 +11,7 @@ from tasks.embedding.embed_chunks import embed_chunks as embed_chunks_service
 from tasks.qdrant.index_embeddings import index_embeddings as index_embeddings_service
 from tasks.rag.validate_index import validate_rag_index as validate_rag_index_service
 from tasks.pipeline.complete_pipeline import complete_pipeline as complete_pipeline_service
+from tasks.pipeline.update_pipeline_stage import update_pipeline_stage as update_pipeline_stage_service
 
 @dag(
     dag_id="ocr_pipeline",
@@ -24,25 +25,47 @@ def ocr_pipeline():
     def check_file(**context):
 
         conf = context["dag_run"].conf
+        airflow_run_id = context["dag_run"].run_id
 
         print("==== DAG CONF ====")
         print(conf)
 
+        print("== PIPELINE STAGE 1 (FILE_PREPARATION) == ")
+        update_pipeline_stage_service(
+            pipeline_info=conf,
+            stage="FILE_PREPARATION",
+            airflow_run_id=airflow_run_id,
+        )
+
         return check_file_service(conf)
 
     @task(on_failure_callback=notify_pipeline_failed,)
-    def prepare_image(file_info):
+    def prepare_image(file_info, **context):
 
         print("==== DAG FILE INFO ====")
         print(f"prepare image : {file_info}")
 
+        print("== PIPELINE STAGE 2 (PREPARE IMAGE) == ")
+        update_pipeline_stage_service(
+            pipeline_info=file_info,
+            stage="DOCUMENT_CONVERSION",
+            airflow_run_id=context["dag_run"].run_id,
+        )
+
         return prepare_image_service(file_info)
 
     @task(on_failure_callback=notify_pipeline_failed,)
-    def run_ocr(image_info):
+    def run_ocr(image_info, **context):
 
         print("==== OCR START ====")
         print(f"image info : {image_info}")
+
+        print("== PIPELINE STAGE 3 (OCR) == ")
+        update_pipeline_stage_service(
+            pipeline_info=image_info,
+            stage="OCR",
+            airflow_run_id=context["dag_run"].run_id,
+        )
 
         return run_ocr_service(image_info)
     
@@ -55,30 +78,58 @@ def ocr_pipeline():
         return save_result_service(ocr_info)
 
     @task(on_failure_callback=notify_pipeline_failed,)
-    def chunking(saved_ocr_info):
+    def chunking(saved_ocr_info, **context):
         print("==== CHUNKING START ====")
         print(f"save info : {saved_ocr_info}")
+
+        print("== PIPELINE STAGE 4 (CHUNKING) == ")
+        update_pipeline_stage_service(
+            pipeline_info=saved_ocr_info,
+            stage="CHUNKING",
+            airflow_run_id=context["dag_run"].run_id,
+        )
 
         return chunk_document_service(saved_ocr_info)
 
     @task(on_failure_callback=notify_pipeline_failed)
-    def embedding(chunk_info):
+    def embedding(chunk_info, **context):
         print("==== EMBEDDING START ====")
         print(f"chunk_info : {chunk_info}")
+
+        print("== PIPELINE STAGE 5 (EMBEDDING) == ")
+        update_pipeline_stage_service(
+            pipeline_info=chunk_info,
+            stage="EMBEDDING",
+            airflow_run_id=context["dag_run"].run_id,
+        )
 
         return embed_chunks_service(chunk_info)
 
     @task(on_failure_callback=notify_pipeline_failed)
-    def qdrant_index(embedding_info):
+    def qdrant_index(embedding_info, **context):
         print("==== QDRANT INDEX START ====")
         print(f"embedding_info : {embedding_info}")
+
+        print("== PIPELINE STAGE 6 (QDRANT_INDEX) == ")
+        update_pipeline_stage_service(
+            pipeline_info=embedding_info,
+            stage="QDRANT_INDEX",
+            airflow_run_id=context["dag_run"].run_id,
+        )
 
         return index_embeddings_service(embedding_info)
 
     @task(on_failure_callback=notify_pipeline_failed)
-    def rag_validation(index_info):
+    def rag_validation(index_info, **context):
         print("==== RAG VALIDATION START ====")
         print(f"index_info: {index_info}")
+
+        print("== PIPELINE STAGE 7 (RAG_VALIDATION) == ")
+        update_pipeline_stage_service(
+            pipeline_info=index_info,
+            stage="RAG_VALIDATION",
+            airflow_run_id=context["dag_run"].run_id,
+        )
 
         return validate_rag_index_service(index_info)
 
