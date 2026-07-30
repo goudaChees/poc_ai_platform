@@ -17,6 +17,8 @@ TASK_STAGE_MAP = {
     "chunking": "CHUNKING",
     "embedding": "EMBEDDING",
     "qdrant_index": "QDRANT_INDEX",
+    "rag_validation": "RAG_VALIDATION",
+    "complete_pipeline": "COMPLETE",
 }
 
 def notify_pipeline_failed(context):

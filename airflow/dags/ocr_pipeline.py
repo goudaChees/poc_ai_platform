@@ -9,7 +9,8 @@ from tasks.ocr.ocr_save_result import save_result as save_result_service
 from tasks.chunking.chunk_document import chunk_document as chunk_document_service
 from tasks.embedding.embed_chunks import embed_chunks as embed_chunks_service
 from tasks.qdrant.index_embeddings import index_embeddings as index_embeddings_service
-
+from tasks.rag.validate_index import validate_rag_index as validate_rag_index_service
+from tasks.pipeline.complete_pipeline import complete_pipeline as complete_pipeline_service
 
 @dag(
     dag_id="ocr_pipeline",
@@ -74,6 +75,25 @@ def ocr_pipeline():
 
         return index_embeddings_service(embedding_info)
 
+    @task(on_failure_callback=notify_pipeline_failed)
+    def rag_validation(index_info):
+        print("==== RAG VALIDATION START ====")
+        print(f"index_info: {index_info}")
+
+        return validate_rag_index_service(index_info)
+
+    @task(on_failure_callback=notify_pipeline_failed)
+    def complete_pipeline(validation_info, **context,):
+        dag_run = context["dag_run"]
+
+        print("==== COMPLETE PIPELINE START ====")
+        print(f"validation_info: {validation_info}")
+        print(f"airflow_run_id: {dag_run.run_id}")
+
+        return complete_pipeline_service(
+            validation_info=validation_info,
+            airflow_run_id=dag_run.run_id,
+        )
 
     file_info  = check_file()
 
@@ -89,9 +109,9 @@ def ocr_pipeline():
 
     index_info = qdrant_index(embedding_info)
 
-    # validation_info = rag_validation(index_info)
+    validation_info = rag_validation(index_info)
 
-    # complete_pipeline(validation_info)
+    complete_pipeline(validation_info)
 
 
 ocr_pipeline()
