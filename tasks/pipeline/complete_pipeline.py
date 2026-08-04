@@ -18,11 +18,11 @@ BACKEND_API_BASE_URL = os.getenv(
 def complete_pipeline(
     validation_info: dict[str, Any],
     airflow_run_id: str,
+    rag_validation_required: bool,
 ) -> dict[str, Any]:
     required_fields = {
         "document_id",
         "execution_id",
-        "validation_status",
     }
 
     missing_fields = sorted(
@@ -36,11 +36,40 @@ def complete_pipeline(
             + ", ".join(missing_fields)
         )
 
-    validation_status = str(
-        validation_info["validation_status"]
+    if not isinstance(
+        rag_validation_required,
+        bool,
+    ):
+        raise ValueError(
+            "rag_validation_required는 "
+            "boolean이어야 합니다."
+        )
+
+    raw_validation_status = (
+        validation_info.get(
+            "validation_status"
+        )
     )
 
-    if validation_status != "SUCCESS":
+    validation_status = (
+        None
+        if raw_validation_status is None
+        else str(raw_validation_status)
+    )
+
+    if (
+        rag_validation_required
+        and validation_status is None
+    ):
+        raise ValueError(
+            "RAG 검증 실행 Pipeline에는 "
+            "validation_status가 필요합니다."
+        )
+
+    if (
+        validation_status is not None
+        and validation_status != "SUCCESS"
+    ):
         raise ValueError(
             "RAG 검증이 성공하지 않았습니다: "
             f"{validation_status}"
@@ -52,7 +81,7 @@ def complete_pipeline(
             "환경변수가 없습니다."
         )
 
-    payload = {
+    payload: dict[str, Any] = {
         "document_id": int(
             validation_info["document_id"]
         ),
@@ -60,8 +89,15 @@ def complete_pipeline(
             validation_info["execution_id"]
         ),
         "airflow_run_id": airflow_run_id,
-        "validation_status": validation_status,
+        "rag_validation_required": (
+            rag_validation_required
+        ),
     }
+
+    if validation_status is not None:
+        payload["validation_status"] = (
+            validation_status
+        )
 
     print(
         "==== PIPELINE COMPLETE API START ====",
@@ -118,10 +154,22 @@ def complete_pipeline(
                 )
             ),
             "airflow_run_id": airflow_run_id,
+            "rag_validation_required": (
+                rag_validation_required
+            ),
+            "validation_status": (
+                validation_status
+            ),
         }
     )
 
-    print("==== PIPELINE COMPLETE API SUCCESS ====", flush=True,)
-    print(result, flush=True,)
+    print(
+        "==== PIPELINE COMPLETE API SUCCESS ====",
+        flush=True,
+    )
+    print(
+        result,
+        flush=True,
+    )
 
     return result

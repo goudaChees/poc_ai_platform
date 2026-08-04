@@ -2,6 +2,7 @@ import requests
 from airflow.sdk import dag, task
 from datetime import datetime
 from tasks.common.pipeline_failure_callback import notify_pipeline_failed
+from tasks.common.stage_gate import is_stage_enabled, pass_through_pipeline_info
 from tasks.ocr.ocr_check_file import check_file as check_file_service
 from tasks.ocr.ocr_prepare_image import prepare_image as prepare_image_service
 from tasks.ocr.ocr_run import run_ocr as run_ocr_service
@@ -24,23 +25,48 @@ def ocr_pipeline():
     @task(on_failure_callback=notify_pipeline_failed,)
     def check_file(**context):
 
-        conf = context["dag_run"].conf
-        airflow_run_id = context["dag_run"].run_id
+        dag_run = context["dag_run"]
+        conf = dag_run.conf or {}        
 
         print("==== DAG CONF ====")
         print(conf)
+
+        if not is_stage_enabled(
+            conf,
+            "FILE_PREPARATION",
+        ):
+            raise ValueError(
+                "필수 Stage가 Execution Plan에 "
+                "없습니다: FILE_PREPARATION"
+            )
 
         print("== PIPELINE STAGE 1 (FILE_PREPARATION) == ")
         update_pipeline_stage_service(
             pipeline_info=conf,
             stage="FILE_PREPARATION",
-            airflow_run_id=airflow_run_id,
+            airflow_run_id=dag_run.run_id,
         )
 
         return check_file_service(conf)
 
     @task(on_failure_callback=notify_pipeline_failed,)
     def prepare_image(file_info, **context):
+
+        dag_run = context["dag_run"]
+        conf = dag_run.conf or {}
+
+        if not is_stage_enabled(
+            conf,
+            "DOCUMENT_CONVERSION",
+        ):
+            return pass_through_pipeline_info(
+                file_info,
+                task_name="prepare_image",
+                stage_code=(
+                    "DOCUMENT_CONVERSION"
+                ),
+            )
+
 
         print("==== DAG FILE INFO ====")
         print(f"prepare image : {file_info}")
@@ -49,13 +75,26 @@ def ocr_pipeline():
         update_pipeline_stage_service(
             pipeline_info=file_info,
             stage="DOCUMENT_CONVERSION",
-            airflow_run_id=context["dag_run"].run_id,
+            airflow_run_id=dag_run.run_id,
         )
 
         return prepare_image_service(file_info)
 
     @task(on_failure_callback=notify_pipeline_failed,)
     def run_ocr(image_info, **context):
+
+        dag_run = context["dag_run"]
+        conf = dag_run.conf or {}
+
+        if not is_stage_enabled(
+            conf,
+            "OCR",
+        ):
+            return pass_through_pipeline_info(
+                image_info,
+                task_name="run_ocr",
+                stage_code="OCR",
+            )
 
         print("==== OCR START ====")
         print(f"image info : {image_info}")
@@ -64,13 +103,25 @@ def ocr_pipeline():
         update_pipeline_stage_service(
             pipeline_info=image_info,
             stage="OCR",
-            airflow_run_id=context["dag_run"].run_id,
+            airflow_run_id=dag_run.run_id,
         )
 
         return run_ocr_service(image_info)
     
     @task(on_failure_callback=notify_pipeline_failed,)
-    def save_result(ocr_info):
+    def save_result(ocr_info, **context):
+
+        conf = context["dag_run"].conf or {}
+
+        if not is_stage_enabled(
+            conf,
+            "OCR",
+        ):
+            return pass_through_pipeline_info(
+                ocr_info,
+                task_name="save_result",
+                stage_code="OCR",
+            )
 
         print("==== SAVE RESULT START ====")
         print(ocr_info)
@@ -79,6 +130,20 @@ def ocr_pipeline():
 
     @task(on_failure_callback=notify_pipeline_failed,)
     def chunking(saved_ocr_info, **context):
+
+        dag_run = context["dag_run"]
+        conf = dag_run.conf or {}
+
+        if not is_stage_enabled(
+            conf,
+            "CHUNKING",
+        ):
+            return pass_through_pipeline_info(
+                saved_ocr_info,
+                task_name="chunking",
+                stage_code="CHUNKING",
+            )
+
         print("==== CHUNKING START ====")
         print(f"save info : {saved_ocr_info}")
 
@@ -86,13 +151,27 @@ def ocr_pipeline():
         update_pipeline_stage_service(
             pipeline_info=saved_ocr_info,
             stage="CHUNKING",
-            airflow_run_id=context["dag_run"].run_id,
+            airflow_run_id=dag_run.run_id,
         )
 
         return chunk_document_service(saved_ocr_info)
 
     @task(on_failure_callback=notify_pipeline_failed)
     def embedding(chunk_info, **context):
+
+        dag_run = context["dag_run"]
+        conf = dag_run.conf or {}
+
+        if not is_stage_enabled(
+            conf,
+            "EMBEDDING",
+        ):
+            return pass_through_pipeline_info(
+                chunk_info,
+                task_name="embedding",
+                stage_code="EMBEDDING",
+            )
+
         print("==== EMBEDDING START ====")
         print(f"chunk_info : {chunk_info}")
 
@@ -100,13 +179,27 @@ def ocr_pipeline():
         update_pipeline_stage_service(
             pipeline_info=chunk_info,
             stage="EMBEDDING",
-            airflow_run_id=context["dag_run"].run_id,
+            airflow_run_id=dag_run.run_id,
         )
 
         return embed_chunks_service(chunk_info)
 
     @task(on_failure_callback=notify_pipeline_failed)
     def qdrant_index(embedding_info, **context):
+
+        dag_run = context["dag_run"]
+        conf = dag_run.conf or {}
+
+        if not is_stage_enabled(
+            conf,
+            "QDRANT_INDEX",
+        ):
+            return pass_through_pipeline_info(
+                embedding_info,
+                task_name="qdrant_index",
+                stage_code="QDRANT_INDEX",
+            )
+
         print("==== QDRANT INDEX START ====")
         print(f"embedding_info : {embedding_info}")
 
@@ -114,13 +207,27 @@ def ocr_pipeline():
         update_pipeline_stage_service(
             pipeline_info=embedding_info,
             stage="QDRANT_INDEX",
-            airflow_run_id=context["dag_run"].run_id,
+            airflow_run_id=dag_run.run_id,
         )
 
         return index_embeddings_service(embedding_info)
 
     @task(on_failure_callback=notify_pipeline_failed)
     def rag_validation(index_info, **context):
+
+        dag_run = context["dag_run"]
+        conf = dag_run.conf or {}
+
+        if not is_stage_enabled(
+            conf,
+            "RAG_VALIDATION",
+        ):
+            return pass_through_pipeline_info(
+                index_info,
+                task_name="rag_validation",
+                stage_code="RAG_VALIDATION",
+            )
+
         print("==== RAG VALIDATION START ====")
         print(f"index_info: {index_info}")
 
@@ -128,22 +235,62 @@ def ocr_pipeline():
         update_pipeline_stage_service(
             pipeline_info=index_info,
             stage="RAG_VALIDATION",
-            airflow_run_id=context["dag_run"].run_id,
+            airflow_run_id=dag_run.run_id,
         )
 
         return validate_rag_index_service(index_info)
 
     @task(on_failure_callback=notify_pipeline_failed)
     def complete_pipeline(validation_info, **context,):
+
         dag_run = context["dag_run"]
+        conf = dag_run.conf or {}
+
+        if not is_stage_enabled(
+            conf,
+            "COMPLETE",
+        ):
+            raise ValueError(
+                "필수 Stage가 Execution Plan에 "
+                "없습니다: COMPLETE"
+            )
+
+        execution_plan = conf.get(
+            "execution_plan"
+        )
+
+        if execution_plan is None:
+            # 과거 수동 실행 등 Plan이 없는 경우에는
+            # 기존 전체 Pipeline으로 취급한다.
+            rag_validation_required = True
+        else:
+            resolved_stages = (
+                execution_plan.get(
+                    "resolved_stages"
+                )
+                or []
+            )
+
+            rag_validation_required = (
+                "RAG_VALIDATION"
+                in resolved_stages
+            )
 
         print("==== COMPLETE PIPELINE START ====")
         print(f"validation_info: {validation_info}")
         print(f"airflow_run_id: {dag_run.run_id}")
 
+        print("rag_validation_required: "
+            f"{rag_validation_required}",
+            flush=True,
+        )
+
         return complete_pipeline_service(
             validation_info=validation_info,
             airflow_run_id=dag_run.run_id,
+            rag_validation_required=(
+                rag_validation_required
+            ),
         )
 
     file_info  = check_file()
