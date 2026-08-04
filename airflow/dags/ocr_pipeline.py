@@ -26,7 +26,7 @@ def ocr_pipeline():
     def check_file(**context):
 
         dag_run = context["dag_run"]
-        conf = dag_run.conf or {}        
+        conf = dag_run.conf or {}
 
         print("==== DAG CONF ====")
         print(conf)

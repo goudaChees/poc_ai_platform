@@ -1,137 +1,114 @@
-import json
-import os
-from paddleocr import PaddleOCR
-from tasks.common.constants import OCR_MEDIA_ROOT
+from __future__ import annotations
+from collections.abc import Mapping
+from typing import Any
+from tasks.ocr.ocr_dispatcher import create_ocr_provider
+from tasks.ocr.ocr_result_writer import write_ocr_result
 
-ocr_engine = None
+def run_ocr(
+    image_info: dict[str, Any],
+    provider_code: str = "PADDLE",
+    provider_options: (
+        Mapping[str, Any]
+        | None
+    ) = None,
+) -> dict[str, Any]:
+    required_fields = {
+        "document_id",
+        "execution_id",
+    }
 
-def get_ocr_engine():
-    global ocr_engine
-
-    if ocr_engine is None:
-
-        print("==== LOAD PADDLE OCR MODEL ====")
-
-        ocr_engine = PaddleOCR(
-            lang="korean"
+    missing_fields = sorted(
+        required_fields
+        - set(
+            image_info.keys()
         )
+    )
 
-        print("==== PADDLE OCR READY ====")
-
-    return ocr_engine
-
-def run_ocr(image_info):
-    ocr = get_ocr_engine()
-
-    document_id = image_info["document_id"]
-    execution_id = image_info["execution_id"]
-    image_files = image_info["image_files"]
-
-    if not image_files:
+    if missing_fields:
         raise ValueError(
-            "OCR을 실행할 이미지가 없습니다."
+            "OCR 실행 필수 값이 없습니다: "
+            + ", ".join(
+                missing_fields
+            )
         )
 
-    results = []
-
-
-    for page_number, image_path in enumerate(
-        image_files,
-        start=1,
-    ):
-        if not os.path.isfile(image_path):
-            raise FileNotFoundError(
-                f"OCR 이미지 파일을 찾을 수 없습니다: {image_path}"
-            )
-
-        print("================================")
-        print(f"OCR START: {image_path}")
-        print(f"page_number: {page_number}")
-        print(f"execution_id: {execution_id}")
-        print("================================")
-
-        prediction = ocr.predict(image_path)
-
-        if not prediction:
-            raise RuntimeError(
-                f"PaddleOCR 결과가 없습니다: {image_path}"
-            )
-
-        ocr_data = prediction[0]
-
-        texts = list(
-            ocr_data.get("rec_texts", [])
-        )
-
-        scores = [
-            float(score)
-            for score in ocr_data.get("rec_scores", [])
+    document_id = int(
+        image_info[
+            "document_id"
         ]
+    )
 
-        results.append(
-            {
-                "page_number": page_number,
-                "image_path": image_path,
-                "texts": texts,
-                "scores": scores,
-            }
+    execution_id = int(
+        image_info[
+            "execution_id"
+        ]
+    )
+
+    if not isinstance(
+        provider_code,
+        str,
+    ):
+        raise ValueError(
+            "OCR Provider code는 "
+            "문자열이어야 합니다."
         )
 
-        print("==============================")
-        print(f"OCR END: {image_path}")
-        print(f"text_count: {len(texts)}")
-        print("==============================")
-
-    result_dir = os.path.join(
-        OCR_MEDIA_ROOT,
-        "ocr_results",
-        str(document_id)
+    normalized_provider_code = (
+        provider_code.strip().upper()
     )
 
-    os.makedirs(
-        result_dir,
-        exist_ok=True
-    )
-
-    result_file = os.path.join(
-        result_dir,
-        "result.json"
-    )
-
-    result_relative_path = os.path.join(
-        "ocr_results",
-        str(document_id),
-        "result.json"
-    )
-
-    result_payload = {
-        "document_id": document_id,
-        "execution_id": execution_id,
-        "results": results,
-    }
-
-
-    with open(
-        result_file,
-        "w",
-        encoding="utf-8"
-    ) as result_json_file:
-
-        json.dump(
-            result_payload,
-            result_json_file,
-            ensure_ascii=False,
-            indent=2,
+    if not normalized_provider_code:
+        raise ValueError(
+            "OCR Provider code가 "
+            "비어 있습니다."
         )
 
-    print("==== OCR RESULT SAVED ====")
-    print(f"document_id: {document_id}")
-    print(f"execution_id: {execution_id}")
-    print(f"result_file: {result_file}")
-    print(f"result_relative_path: {result_relative_path}")
+    selected_provider_options = dict(
+        provider_options
+        or {}
+    )
 
-    return {
-        "document_id": document_id,
-        "execution_id": execution_id,
-        "result_path": result_relative_path
-    }
+    print(
+        "==== OCR PROVIDER DISPATCH ====",
+        flush=True,
+    )
+    print(
+        f"document_id: {document_id}",
+        flush=True,
+    )
+    print(
+        f"execution_id: {execution_id}",
+        flush=True,
+    )
+    print(
+        "provider: "
+        f"{normalized_provider_code}",
+        flush=True,
+    )
+    print(
+        "provider_options: "
+        f"{selected_provider_options}",
+        flush=True,
+    )
+
+    provider = create_ocr_provider(
+        provider_code=(
+            normalized_provider_code
+        ),
+        provider_options=(
+            selected_provider_options
+        ),
+    )
+
+    results = provider.recognize(
+        image_info
+    )
+
+    return write_ocr_result(
+        document_id=document_id,
+        execution_id=execution_id,
+        provider_code=(
+            normalized_provider_code
+        ),
+        results=results,
+    )
