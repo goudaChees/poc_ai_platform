@@ -1,5 +1,7 @@
+from __future__ import annotations
 import os
 import fitz
+from typing import Any
 from tasks.common.constants import OCR_MEDIA_ROOT
 
 SUPPORTED_IMAGE_TYPES = {
