@@ -106,7 +106,39 @@ def ocr_pipeline():
             airflow_run_id=dag_run.run_id,
         )
 
-        return run_ocr_service(image_info)
+        execution_plan = (conf.get("execution_plan") or {})
+        stage_options = (execution_plan.get("stage_options") or {})
+        ocr_options = (stage_options.get("OCR") or {})
+
+        provider_code = str(
+            ocr_options.get(
+                "provider",
+                "PADDLE",
+            )
+        ).strip().upper()
+
+        provider_options = (
+            ocr_options.get("config")
+            or {}
+        )
+
+        print(
+            "OCR provider_code: "
+            f"{provider_code}",
+            flush=True,
+        )
+
+        print(
+            "OCR provider_option_keys: "
+            f"{sorted(provider_options.keys())}",
+            flush=True,
+        )
+
+        return run_ocr_service(
+            image_info,
+            provider_code=provider_code,
+            provider_options=provider_options,
+        )
     
     @task(on_failure_callback=notify_pipeline_failed,)
     def save_result(ocr_info, **context):

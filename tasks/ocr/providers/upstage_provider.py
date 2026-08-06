@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import os
-from collections import defaultdict
+import os # api통신시 사용
+import requests
 from collections.abc import Mapping
-from html import unescape
-from html.parser import HTMLParser
+
 from pathlib import Path
 from typing import Any
 
@@ -22,20 +21,15 @@ DEFAULT_UPSTAGE_API_URL = (
     "/v1/document-digitization"
 )
 
-DEFAULT_UPSTAGE_MODEL = (
-    "document-parse"
-)
+# DEFAULT_UPSTAGE_MODEL = "document-parse"
+DEFAULT_UPSTAGE_MODEL = "ocr"
+# DEFAULT_UPSTAGE_OCR_MODE = "force"
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 120
 
-DEFAULT_UPSTAGE_OCR_MODE = (
-    "force"
-)
-
-DEFAULT_REQUEST_TIMEOUT_SECONDS = 300
-
-DEFAULT_OUTPUT_FORMATS = (
-    "text",
-    "html",
-)
+# DEFAULT_OUTPUT_FORMATS = (
+#     "text",
+#     "html",
+# )
 
 
 class UpstageOcrProvider:
@@ -52,11 +46,11 @@ class UpstageOcrProvider:
 
         supported_options = {
             "model",
-            "ocr",
-            "output_formats",
-            "coordinates",
-            "chart_recognition",
-            "base64_encoding",
+            # "ocr",
+            # "output_formats",
+            # "coordinates",
+            # "chart_recognition",
+            # "base64_encoding",
         }
 
         unsupported_options = sorted(
@@ -110,49 +104,49 @@ class UpstageOcrProvider:
             ),
         )
 
-        self.ocr_mode = (
-            _read_string_option(
-                selected_options,
-                key="ocr",
-                default=(
-                    DEFAULT_UPSTAGE_OCR_MODE
-                ),
-            )
-        )
+        # self.ocr_mode = (
+        #     _read_string_option(
+        #         selected_options,
+        #         key="ocr",
+        #         default=(
+        #             DEFAULT_UPSTAGE_OCR_MODE
+        #         ),
+        #     )
+        # )
 
-        self.output_formats = (
-            _read_string_list_option(
-                selected_options,
-                key="output_formats",
-                default=(
-                    DEFAULT_OUTPUT_FORMATS
-                ),
-            )
-        )
+        # self.output_formats = (
+        #     _read_string_list_option(
+        #         selected_options,
+        #         key="output_formats",
+        #         default=(
+        #             DEFAULT_OUTPUT_FORMATS
+        #         ),
+        #     )
+        # )
 
-        self.coordinates = (
-            _read_bool_option(
-                selected_options,
-                key="coordinates",
-                default=True,
-            )
-        )
+        # self.coordinates = (
+        #     _read_bool_option(
+        #         selected_options,
+        #         key="coordinates",
+        #         default=True,
+        #     )
+        # )
 
-        self.chart_recognition = (
-            _read_bool_option(
-                selected_options,
-                key="chart_recognition",
-                default=False,
-            )
-        )
+        # self.chart_recognition = (
+        #     _read_bool_option(
+        #         selected_options,
+        #         key="chart_recognition",
+        #         default=False,
+        #     )
+        # )
 
-        self.base64_encoding = (
-            _read_string_list_option(
-                selected_options,
-                key="base64_encoding",
-                default=(),
-            )
-        )
+        # self.base64_encoding = (
+        #     _read_string_list_option(
+        #         selected_options,
+        #         key="base64_encoding",
+        #         default=(),
+        #     )
+        # )
 
         self.timeout_seconds = (
             _read_timeout_seconds()
@@ -186,28 +180,28 @@ class UpstageOcrProvider:
                 f"{source_file}"
             )
 
-        request_data = {
-            "model": self.model,
-            "ocr": self.ocr_mode,
-            "coordinates": (
-                self.coordinates
-            ),
-            "chart_recognition": (
-                self.chart_recognition
-            ),
-            "output_formats": json.dumps(
-                list(
-                    self.output_formats
-                ),
-                ensure_ascii=False,
-            ),
-            "base64_encoding": json.dumps(
-                list(
-                    self.base64_encoding
-                ),
-                ensure_ascii=False,
-            ),
-        }
+        # request_data = {
+        #     "model": self.model,
+        #     "ocr": self.ocr_mode,
+        #     "coordinates": (
+        #         self.coordinates
+        #     ),
+        #     "chart_recognition": (
+        #         self.chart_recognition
+        #     ),
+        #     "output_formats": json.dumps(
+        #         list(
+        #             self.output_formats
+        #         ),
+        #         ensure_ascii=False,
+        #     ),
+        #     "base64_encoding": json.dumps(
+        #         list(
+        #             self.base64_encoding
+        #         ),
+        #         ensure_ascii=False,
+        #     ),
+        # }
 
         mime_type = (
             mimetypes.guess_type(
@@ -230,25 +224,6 @@ class UpstageOcrProvider:
             f"model: {self.model}",
             flush=True,
         )
-        print(
-            f"ocr: {self.ocr_mode}",
-            flush=True,
-        )
-        print(
-            "output_formats: "
-            f"{list(self.output_formats)}",
-            flush=True,
-        )
-        print(
-            "coordinates: "
-            f"{self.coordinates}",
-            flush=True,
-        )
-        print(
-            "chart_recognition: "
-            f"{self.chart_recognition}",
-            flush=True,
-        )
 
         try:
             with source_file.open(
@@ -269,7 +244,9 @@ class UpstageOcrProvider:
                             mime_type,
                         )
                     },
-                    data=request_data,
+                    data={
+                        "model": self.model,
+                    },
                     timeout=(
                         self.timeout_seconds
                     ),
@@ -277,8 +254,8 @@ class UpstageOcrProvider:
 
         except requests.RequestException as error:
             raise RuntimeError(
-                "Upstage Document Parse "
-                "API 호출에 실패했습니다: "
+                "Upstage OCR API 호출에 "
+                "실패했습니다: "
                 f"{error}"
             ) from error
 
@@ -289,7 +266,7 @@ class UpstageOcrProvider:
             )[:2000]
 
             raise RuntimeError(
-                "Upstage Document Parse API가 "
+                "Upstage OCR API가 "
                 "오류를 반환했습니다: "
                 f"status={response.status_code}, "
                 f"body={response_body}"
@@ -302,9 +279,8 @@ class UpstageOcrProvider:
 
         except ValueError as error:
             raise ValueError(
-                "Upstage Document Parse "
-                "API 응답이 JSON 형식이 "
-                "아닙니다."
+                "Upstage OCR API 응답이 "
+                "JSON 형식이 아닙니다."                
             ) from error
 
         if not isinstance(
@@ -312,9 +288,8 @@ class UpstageOcrProvider:
             dict,
         ):
             raise ValueError(
-                "Upstage Document Parse "
-                "API 응답은 JSON 객체여야 "
-                "합니다."
+                "Upstage OCR API 응답은 "
+                "JSON 객체여야 합니다."                
             )
 
         results = (
@@ -325,6 +300,15 @@ class UpstageOcrProvider:
                 source_file_path=(
                     str(source_file)
                 ),
+            )
+        )
+
+        raw_response_path = (
+            _write_raw_response(
+                response_payload=(
+                    response_payload
+                ),
+                image_info=image_info,
             )
         )
 
@@ -339,8 +323,8 @@ class UpstageOcrProvider:
             flush=True,
         )
         print(
-            "request_id: "
-            f"{response_payload.get('request_id')}",
+            "model_version: "
+            f"{response_payload.get('modelVersion')}",
             flush=True,
         )
         print(
@@ -352,17 +336,28 @@ class UpstageOcrProvider:
             f"{sum(len(page['texts']) for page in results)}",
             flush=True,
         )
+        print(
+            "raw_response_path: "
+            f"{raw_response_path}",
+            flush=True,
+        )
 
         return results
-
 
 def _normalize_upstage_response(
     *,
     response_payload: dict[str, Any],
     source_file_path: str,
 ) -> list[OcrPageResult]:
-    element_results = (
-        _normalize_elements(
+    raw_pages = response_payload.get(
+        "pages"
+    )
+
+    if not isinstance(
+        raw_pages,
+        list,
+    ) or not raw_pages:
+        return _normalize_root_text(
             response_payload=(
                 response_payload
             ),
@@ -370,112 +365,78 @@ def _normalize_upstage_response(
                 source_file_path
             ),
         )
-    )
-
-    if element_results:
-        return element_results
-
-    content = response_payload.get(
-        "content"
-    )
-
-    text = _extract_content_text(
-        content
-    )
-
-    if not text:
-        raise RuntimeError(
-            "Upstage Document Parse "
-            "응답에서 인식 텍스트를 "
-            "찾지 못했습니다."
-        )
-
-    return [
-        {
-            "page_number": 1,
-            "image_path": (
-                source_file_path
-            ),
-            "texts": [
-                text
-            ],
-            "scores": [],
-        }
-    ]
-
-
-def _normalize_elements(
-    *,
-    response_payload: dict[str, Any],
-    source_file_path: str,
-) -> list[OcrPageResult]:
-    elements = response_payload.get(
-        "elements"
-    )
-
-    if not isinstance(
-        elements,
-        list,
-    ) or not elements:
-        return []
-
-    page_texts: dict[
-        int,
-        list[str],
-    ] = defaultdict(
-        list
-    )
-
-    valid_elements = [
-        element
-        for element in elements
-        if isinstance(
-            element,
-            dict,
-        )
-    ]
-
-    sorted_elements = sorted(
-        valid_elements,
-        key=_element_sort_key,
-    )
-
-    for element in sorted_elements:
-        text = _extract_content_text(
-            element.get(
-                "content"
-            )
-        )
-
-        if not text:
-            continue
-
-        page_number = (
-            _normalize_page_number(
-                element.get(
-                    "page"
-                )
-            )
-        )
-
-        page_texts[
-            page_number
-        ].append(
-            text
-        )
 
     results: list[
         OcrPageResult
     ] = []
 
-    for page_number in sorted(
-        page_texts.keys()
+    for (
+        page_index,
+        raw_page,
+    ) in enumerate(
+        raw_pages,
+        start=1,
     ):
-        texts = page_texts[
-            page_number
-        ]
+        if not isinstance(
+            raw_page,
+            Mapping,
+        ):
+            continue
+
+        page_number = (
+            _resolve_page_number(
+                raw_page=raw_page,
+                fallback_page_number=(
+                    page_index
+                ),
+            )
+        )
+
+        texts, scores = (
+            _extract_page_lines(
+                raw_page
+            )
+        )
 
         if not texts:
+            texts, scores = (
+                _extract_page_words(
+                    raw_page
+                )
+            )
+
+        if not texts:
+            page_text = _normalize_text(
+                raw_page.get(
+                    "text"
+                )
+            )
+
+            if page_text:
+                texts = _split_text_lines(
+                    page_text
+                )
+
+                page_score = (
+                    _normalize_confidence(
+                        raw_page.get(
+                            "confidence"
+                        )
+                    )
+                )
+
+                scores = [
+                    page_score
+                    for _ in texts
+                ]
+
+        if not texts:
+            print(
+                "빈 Upstage OCR 페이지를 "
+                "건너뜁니다: "
+                f"page_number={page_number}",
+                flush=True,
+            )
             continue
 
         results.append(
@@ -487,128 +448,233 @@ def _normalize_elements(
                     source_file_path
                 ),
                 "texts": texts,
-                "scores": [],
+                "scores": scores,
             }
+        )
+
+    if not results:
+        raise RuntimeError(
+            "Upstage OCR 응답에서 "
+            "인식 텍스트를 찾지 못했습니다."
         )
 
     return results
 
 
-def _element_sort_key(
-    element: dict[str, Any],
-) -> tuple[int, int]:
-    page_number = (
-        _normalize_page_number(
-            element.get(
-                "page"
-            )
-        )
+def _resolve_page_number(
+    *,
+    raw_page: Mapping[str, Any],
+    fallback_page_number: int,
+) -> int:
+    raw_page_number = raw_page.get(
+        "page"
     )
 
-    raw_element_id = element.get(
+    if raw_page_number is not None:
+        try:
+            page_number = int(
+                raw_page_number
+            )
+
+            if page_number >= 1:
+                return page_number
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            pass
+
+    raw_page_id = raw_page.get(
         "id"
     )
 
-    try:
-        element_id = int(
-            raw_element_id
-        )
+    if raw_page_id is not None:
+        try:
+            page_id = int(
+                raw_page_id
+            )
 
-    except (
-        TypeError,
-        ValueError,
-    ):
-        element_id = 0
+            if page_id >= 0:
+                return page_id + 1
 
-    return (
-        page_number,
-        element_id,
+        except (
+            TypeError,
+            ValueError,
+        ):
+            pass
+
+    return fallback_page_number
+
+
+def _extract_page_lines(
+    raw_page: Mapping[str, Any],
+) -> tuple[list[str], list[float]]:
+    raw_lines = raw_page.get(
+        "lines"
     )
 
+    if not isinstance(
+        raw_lines,
+        list,
+    ):
+        return [], []
 
-def _normalize_page_number(
-    raw_page_number: Any,
+    valid_lines = [
+        line
+        for line in raw_lines
+        if isinstance(
+            line,
+            Mapping,
+        )
+    ]
+
+    sorted_lines = sorted(
+        valid_lines,
+        key=_ocr_item_sort_key,
+    )
+
+    texts: list[str] = []
+    scores: list[float] = []
+
+    page_confidence = raw_page.get(
+        "confidence"
+    )
+
+    for line in sorted_lines:
+        text = _normalize_text(
+            line.get(
+                "text"
+            )
+        )
+
+        if not text:
+            continue
+
+        texts.append(
+            text
+        )
+
+        scores.append(
+            _normalize_confidence(
+                line.get(
+                    "confidence"
+                ),
+                fallback=(
+                    page_confidence
+                ),
+            )
+        )
+
+    return texts, scores
+
+
+def _extract_page_words(
+    raw_page: Mapping[str, Any],
+) -> tuple[list[str], list[float]]:
+    raw_words = raw_page.get(
+        "words"
+    )
+
+    if not isinstance(
+        raw_words,
+        list,
+    ):
+        return [], []
+
+    valid_words = [
+        word
+        for word in raw_words
+        if isinstance(
+            word,
+            Mapping,
+        )
+    ]
+
+    sorted_words = sorted(
+        valid_words,
+        key=_ocr_item_sort_key,
+    )
+
+    texts: list[str] = []
+    scores: list[float] = []
+
+    page_confidence = raw_page.get(
+        "confidence"
+    )
+
+    for word in sorted_words:
+        text = _normalize_text(
+            word.get(
+                "text"
+            )
+        )
+
+        if not text:
+            continue
+
+        texts.append(
+            text
+        )
+
+        scores.append(
+            _normalize_confidence(
+                word.get(
+                    "confidence"
+                ),
+                fallback=(
+                    page_confidence
+                ),
+            )
+        )
+
+    return texts, scores
+
+
+def _ocr_item_sort_key(
+    item: Mapping[str, Any],
 ) -> int:
     try:
-        page_number = int(
-            raw_page_number
+        return int(
+            item.get(
+                "id",
+                0,
+            )
         )
 
     except (
         TypeError,
         ValueError,
     ):
-        return 1
-
-    if page_number < 1:
-        return 1
-
-    return page_number
-
-
-def _extract_content_text(
-    raw_content: Any,
-) -> str:
-    if not isinstance(
-        raw_content,
-        Mapping,
-    ):
-        return ""
-
-    for content_key in (
-        "text",
-        "markdown",
-    ):
-        raw_value = raw_content.get(
-            content_key
-        )
-
-        if (
-            isinstance(
-                raw_value,
-                str,
-            )
-            and raw_value.strip()
-        ):
-            return _normalize_text(
-                raw_value
-            )
-
-    raw_html = raw_content.get(
-        "html"
-    )
-
-    if (
-        isinstance(
-            raw_html,
-            str,
-        )
-        and raw_html.strip()
-    ):
-        return _html_to_text(
-            raw_html
-        )
-
-    return ""
+        return 0
 
 
 def _normalize_text(
-    text: str,
+    raw_text: Any,
 ) -> str:
-    normalized_text = (
-        text.replace(
-            "\r\n",
-            "\n",
-        ).replace(
-            "\r",
-            "\n",
-        )
-    )
+    if not isinstance(
+        raw_text,
+        str,
+    ):
+        return ""
 
     normalized_lines = [
-        line.strip()
-        for line in normalized_text.split(
-            "\n"
+        " ".join(
+            line.split()
+        )
+        for line in (
+            raw_text
+            .replace(
+                "\r\n",
+                "\n",
+            )
+            .replace(
+                "\r",
+                "\n",
+            )
+            .split(
+                "\n"
+            )
         )
     ]
 
@@ -619,106 +685,92 @@ def _normalize_text(
     )
 
 
-def _html_to_text(
-    html_value: str,
-) -> str:
-    parser = _HtmlTextExtractor()
+def _split_text_lines(
+    text: str,
+) -> list[str]:
+    return [
+        line
+        for line in text.split(
+            "\n"
+        )
+        if line.strip()
+    ]
 
-    parser.feed(
-        html_value
+
+def _normalize_confidence(
+    raw_confidence: Any,
+    *,
+    fallback: Any = None,
+) -> float:
+    for value in (
+        raw_confidence,
+        fallback,
+    ):
+        try:
+            if value is None:
+                continue
+
+            confidence = float(
+                value
+            )
+
+            if confidence < 0:
+                return 0.0
+
+            if confidence > 1:
+                return 1.0
+
+            return confidence
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            continue
+
+    return 0.0
+
+
+def _normalize_root_text(
+    *,
+    response_payload: Mapping[str, Any],
+    source_file_path: str,
+) -> list[OcrPageResult]:
+    text = _normalize_text(
+        response_payload.get(
+            "text"
+        )
     )
 
-    parser.close()
+    if not text:
+        raise RuntimeError(
+            "Upstage OCR 응답에 "
+            "pages와 text가 없습니다."
+        )
 
-    return _normalize_text(
-        unescape(
-            parser.get_text()
+    texts = _split_text_lines(
+        text
+    )
+
+    score = _normalize_confidence(
+        response_payload.get(
+            "confidence"
         )
     )
 
-
-class _HtmlTextExtractor(
-    HTMLParser
-):
-    _BLOCK_TAGS = {
-        "article",
-        "blockquote",
-        "br",
-        "caption",
-        "div",
-        "figcaption",
-        "footer",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "header",
-        "li",
-        "p",
-        "section",
-        "td",
-        "th",
-        "tr",
-    }
-
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__(
-            convert_charrefs=True
-        )
-
-        self._parts: list[
-            str
-        ] = []
-
-    def handle_starttag(
-        self,
-        tag: str,
-        attrs: list[
-            tuple[
-                str,
-                str | None,
-            ]
-        ],
-    ) -> None:
-        del attrs
-
-        if tag.lower() in (
-            self._BLOCK_TAGS
-        ):
-            self._parts.append(
-                "\n"
-            )
-
-    def handle_endtag(
-        self,
-        tag: str,
-    ) -> None:
-        if tag.lower() in (
-            self._BLOCK_TAGS
-        ):
-            self._parts.append(
-                "\n"
-            )
-
-    def handle_data(
-        self,
-        data: str,
-    ) -> None:
-        if data:
-            self._parts.append(
-                data
-            )
-
-    def get_text(
-        self,
-    ) -> str:
-        return "".join(
-            self._parts
-        )
+    return [
+        {
+            "page_number": 1,
+            "image_path": (
+                source_file_path
+            ),
+            "texts": texts,
+            "scores": [
+                score
+                for _ in texts
+            ],
+        }
+    ]
 
 
 def _read_string_option(
@@ -743,128 +795,6 @@ def _read_string_option(
         )
 
     return value
-
-
-def _read_bool_option(
-    options: Mapping[str, Any],
-    *,
-    key: str,
-    default: bool,
-) -> bool:
-    raw_value = options.get(
-        key,
-        default,
-    )
-
-    if isinstance(
-        raw_value,
-        bool,
-    ):
-        return raw_value
-
-    if isinstance(
-        raw_value,
-        str,
-    ):
-        normalized_value = (
-            raw_value.strip().lower()
-        )
-
-        if normalized_value in {
-            "true",
-            "1",
-            "yes",
-            "y",
-        }:
-            return True
-
-        if normalized_value in {
-            "false",
-            "0",
-            "no",
-            "n",
-        }:
-            return False
-
-    raise ValueError(
-        f"Upstage {key} 옵션은 "
-        "boolean이어야 합니다."
-    )
-
-
-def _read_string_list_option(
-    options: Mapping[str, Any],
-    *,
-    key: str,
-    default: tuple[str, ...],
-) -> tuple[str, ...]:
-    raw_value = options.get(
-        key,
-        default,
-    )
-
-    if isinstance(
-        raw_value,
-        str,
-    ):
-        stripped_value = (
-            raw_value.strip()
-        )
-
-        if not stripped_value:
-            return ()
-
-        try:
-            decoded_value = (
-                json.loads(
-                    stripped_value
-                )
-            )
-
-        except json.JSONDecodeError:
-            decoded_value = [
-                part.strip()
-                for part in (
-                    stripped_value.split(
-                        ","
-                    )
-                )
-                if part.strip()
-            ]
-
-        raw_value = decoded_value
-
-    if not isinstance(
-        raw_value,
-        (
-            list,
-            tuple,
-        ),
-    ):
-        raise ValueError(
-            f"Upstage {key} 옵션은 "
-            "문자열 목록이어야 합니다."
-        )
-
-    normalized_values: list[
-        str
-    ] = []
-
-    for item in raw_value:
-        normalized_item = str(
-            item
-        ).strip()
-
-        if not normalized_item:
-            continue
-
-        normalized_values.append(
-            normalized_item
-        )
-
-    return tuple(
-        normalized_values
-    )
 
 
 def _read_timeout_seconds(
@@ -896,3 +826,50 @@ def _read_timeout_seconds(
         )
 
     return timeout_seconds
+
+
+def _write_raw_response(
+    *,
+    response_payload: dict[str, Any],
+    image_info: dict[str, Any],
+) -> str:
+    document_id = int(
+        image_info["document_id"]
+    )
+    execution_id = int(
+        image_info["execution_id"]
+    )
+
+    output_dir = (
+        Path(
+            os.environ["OCR_MEDIA_ROOT"]
+        )
+        / "ocr_results"
+        / str(document_id)
+        / str(execution_id)
+    )
+
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    raw_response_file = (
+        output_dir
+        / "upstage_raw_response.json"
+    )
+
+    with raw_response_file.open(
+        "w",
+        encoding="utf-8",
+    ) as file:
+        json.dump(
+            response_payload,
+            file,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    return str(
+        raw_response_file
+    )

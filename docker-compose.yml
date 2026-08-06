@@ -23,6 +23,12 @@ x-airflow-common: &airflow-common
     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     OCR_MEDIA_ROOT: /opt/airflow/media
 
+    OCR_PROVIDER: ${OCR_PROVIDER:-paddle}
+
+    UPSTAGE_API_KEY: ${UPSTAGE_API_KEY:-}
+    UPSTAGE_OCR_URL: ${UPSTAGE_OCR_URL:-https://api.upstage.ai/v1/document-digitization}
+    UPSTAGE_OCR_TIMEOUT: ${UPSTAGE_OCR_TIMEOUT:-60}
+
     QDRANT_URL: http://qdrant:6333
     QDRANT_COLLECTION_NAME: document_chunks
 

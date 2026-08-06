@@ -1,12 +1,15 @@
 from __future__ import annotations
+import os
 from collections.abc import Mapping
 from typing import Any
 from tasks.ocr.ocr_dispatcher import create_ocr_provider
 from tasks.ocr.ocr_result_writer import write_ocr_result
 
+DEFAULT_OCR_PROVIDER = "PADDLE"
+
 def run_ocr(
     image_info: dict[str, Any],
-    provider_code: str = "PADDLE",
+    provider_code: str | None = None,
     provider_options: (
         Mapping[str, Any]
         | None
@@ -44,6 +47,14 @@ def run_ocr(
         ]
     )
 
+    selected_provider_code = (
+        provider_code
+        or os.getenv(
+            "OCR_PROVIDER",
+            DEFAULT_OCR_PROVIDER,
+        )
+    )
+
     if not isinstance(
         provider_code,
         str,
@@ -54,7 +65,7 @@ def run_ocr(
         )
 
     normalized_provider_code = (
-        provider_code.strip().upper()
+        selected_provider_code.strip().upper()
     )
 
     if not normalized_provider_code:
@@ -86,8 +97,8 @@ def run_ocr(
         flush=True,
     )
     print(
-        "provider_options: "
-        f"{selected_provider_options}",
+        "provider_options_keys: "
+        f"{sorted(selected_provider_options.keys())}",
         flush=True,
     )
 
