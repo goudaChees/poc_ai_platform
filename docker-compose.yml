@@ -25,6 +25,8 @@ x-airflow-common: &airflow-common
 
     OCR_PROVIDER: ${OCR_PROVIDER:-paddle}
 
+    UPSTAGE_OCR_MODE: ${UPSTAGE_OCR_MODE:-REPLAY}
+
     UPSTAGE_API_KEY: ${UPSTAGE_API_KEY:-}
     UPSTAGE_OCR_URL: ${UPSTAGE_OCR_URL:-https://api.upstage.ai/v1/document-digitization}
     UPSTAGE_OCR_TIMEOUT: ${UPSTAGE_OCR_TIMEOUT:-60}

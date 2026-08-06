@@ -15,21 +15,24 @@ from tasks.ocr.providers.base import (
     OcrPageResult,
 )
 
-
 DEFAULT_UPSTAGE_API_URL = (
     "https://api.upstage.ai"
     "/v1/document-digitization"
 )
 
-# DEFAULT_UPSTAGE_MODEL = "document-parse"
 DEFAULT_UPSTAGE_MODEL = "ocr"
-# DEFAULT_UPSTAGE_OCR_MODE = "force"
+DEFAULT_UPSTAGE_OCR_MODE = "REPLAY"
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 120
 
-# DEFAULT_OUTPUT_FORMATS = (
-#     "text",
-#     "html",
-# )
+
+# api 통신시 비용처리가 되어 현재는 저장된 response.json 데이터를 넘겨 
+# airflow dag를 선택적으로 처리하기 위한 코드
+DEFAULT_UPSTAGE_REPLAY_RESPONSE_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "fixtures"
+    / "upstage"
+    / "sample_response.json"
+)
 
 
 class UpstageOcrProvider:
@@ -46,11 +49,7 @@ class UpstageOcrProvider:
 
         supported_options = {
             "model",
-            # "ocr",
-            # "output_formats",
-            # "coordinates",
-            # "chart_recognition",
-            # "base64_encoding",
+            "replay_response_path", # test용 임시
         }
 
         unsupported_options = sorted(
@@ -67,90 +66,81 @@ class UpstageOcrProvider:
                 )
             )
 
-        self.api_key = str(
-            os.getenv(
-                "UPSTAGE_API_KEY"
-            )
-            or ""
-        ).strip()
-
-        if not self.api_key:
-            raise RuntimeError(
-                "UPSTAGE_API_KEY "
-                "환경변수가 없습니다."
-            )
-
-        self.api_url = str(
-            os.getenv(
-                "UPSTAGE_DOCUMENT_PARSE_URL"
-            )
-            or DEFAULT_UPSTAGE_API_URL
-        ).strip()
-
-        if not self.api_url:
-            raise RuntimeError(
-                "UPSTAGE_DOCUMENT_PARSE_URL이 "
-                "비어 있습니다."
-            )
+        self.mode = _read_ocr_mode()
 
         self.model = _read_string_option(
             selected_options,
             key="model",
             default=(
                 os.getenv(
+                    "UPSTAGE_OCR_MODEL"
+                )
+                or os.getenv(
                     "UPSTAGE_DOCUMENT_PARSE_MODEL"
                 )
                 or DEFAULT_UPSTAGE_MODEL
             ),
         )
 
-        # self.ocr_mode = (
-        #     _read_string_option(
-        #         selected_options,
-        #         key="ocr",
-        #         default=(
-        #             DEFAULT_UPSTAGE_OCR_MODE
-        #         ),
-        #     )
-        # )
-
-        # self.output_formats = (
-        #     _read_string_list_option(
-        #         selected_options,
-        #         key="output_formats",
-        #         default=(
-        #             DEFAULT_OUTPUT_FORMATS
-        #         ),
-        #     )
-        # )
-
-        # self.coordinates = (
-        #     _read_bool_option(
-        #         selected_options,
-        #         key="coordinates",
-        #         default=True,
-        #     )
-        # )
-
-        # self.chart_recognition = (
-        #     _read_bool_option(
-        #         selected_options,
-        #         key="chart_recognition",
-        #         default=False,
-        #     )
-        # )
-
-        # self.base64_encoding = (
-        #     _read_string_list_option(
-        #         selected_options,
-        #         key="base64_encoding",
-        #         default=(),
-        #     )
-        # )
-
-        self.timeout_seconds = (
-            _read_timeout_seconds()
+        replay_path_value = (
+            selected_options.get(
+                "replay_response_path"
+            )
+            or os.getenv(
+                "UPSTAGE_REPLAY_RESPONSE_PATH"
+            )
+            or DEFAULT_UPSTAGE_REPLAY_RESPONSE_PATH
         )
+
+        self.replay_response_path = Path(
+            str(replay_path_value)
+        )
+
+        if not self.replay_response_path.is_absolute():
+            self.replay_response_path = (
+                Path.cwd()
+                / self.replay_response_path
+            ).resolve()
+
+        self.api_key = ""
+        self.api_url = DEFAULT_UPSTAGE_API_URL
+        self.timeout_seconds = (
+            DEFAULT_REQUEST_TIMEOUT_SECONDS
+        )
+
+        if self.mode == "LIVE":
+            self.api_key = str(
+                os.getenv(
+                    "UPSTAGE_API_KEY"
+                )
+                or ""
+            ).strip()
+
+            if not self.api_key:
+                raise RuntimeError(
+                    "UPSTAGE_OCR_MODE가 LIVE이지만 "
+                    "UPSTAGE_API_KEY 환경변수가 없습니다."
+                )
+
+            self.api_url = str(
+                os.getenv(
+                    "UPSTAGE_OCR_URL"
+                )
+                or os.getenv(
+                    "UPSTAGE_DOCUMENT_PARSE_URL"
+                )
+                or DEFAULT_UPSTAGE_API_URL
+            ).strip()
+
+            if not self.api_url:
+                raise RuntimeError(
+                    "Upstage OCR API URL이 "
+                    "비어 있습니다."
+                )
+
+            self.timeout_seconds = (
+                _read_timeout_seconds()
+            )
 
     def recognize(
         self,
@@ -180,39 +170,12 @@ class UpstageOcrProvider:
                 f"{source_file}"
             )
 
-        # request_data = {
-        #     "model": self.model,
-        #     "ocr": self.ocr_mode,
-        #     "coordinates": (
-        #         self.coordinates
-        #     ),
-        #     "chart_recognition": (
-        #         self.chart_recognition
-        #     ),
-        #     "output_formats": json.dumps(
-        #         list(
-        #             self.output_formats
-        #         ),
-        #         ensure_ascii=False,
-        #     ),
-        #     "base64_encoding": json.dumps(
-        #         list(
-        #             self.base64_encoding
-        #         ),
-        #         ensure_ascii=False,
-        #     ),
-        # }
-
-        mime_type = (
-            mimetypes.guess_type(
-                source_file.name
-            )[0]
-            or "application/octet-stream"
-        )
-
         print(
-            "==== UPSTAGE DOCUMENT "
-            "PARSE START ====",
+            "==== UPSTAGE OCR START ====",
+            flush=True,
+        )
+        print(
+            f"mode: {self.mode}",
             flush=True,
         )
         print(
@@ -225,71 +188,26 @@ class UpstageOcrProvider:
             flush=True,
         )
 
-        try:
-            with source_file.open(
-                "rb"
-            ) as file_object:
-                response = requests.post(
-                    self.api_url,
-                    headers={
-                        "Authorization": (
-                            "Bearer "
-                            f"{self.api_key}"
-                        )
-                    },
-                    files={
-                        "document": (
-                            source_file.name,
-                            file_object,
-                            mime_type,
-                        )
-                    },
-                    data={
-                        "model": self.model,
-                    },
-                    timeout=(
-                        self.timeout_seconds
-                    ),
-                )
-
-        except requests.RequestException as error:
-            raise RuntimeError(
-                "Upstage OCR API 호출에 "
-                "실패했습니다: "
-                f"{error}"
-            ) from error
-
-        if not response.ok:
-            response_body = (
-                response.text
-                or ""
-            )[:2000]
-
-            raise RuntimeError(
-                "Upstage OCR API가 "
-                "오류를 반환했습니다: "
-                f"status={response.status_code}, "
-                f"body={response_body}"
-            )
-
-        try:
+        if self.mode == "LIVE":
             response_payload = (
-                response.json()
+                self._call_upstage_api(
+                    source_file=source_file,
+                )
             )
 
-        except ValueError as error:
-            raise ValueError(
-                "Upstage OCR API 응답이 "
-                "JSON 형식이 아닙니다."                
-            ) from error
+        else:
+            print(
+                "replay_response_path: "
+                f"{self.replay_response_path}",
+                flush=True,
+            )
 
-        if not isinstance(
-            response_payload,
-            dict,
-        ):
-            raise ValueError(
-                "Upstage OCR API 응답은 "
-                "JSON 객체여야 합니다."                
+            response_payload = (
+                _read_replay_response(
+                    replay_response_path=(
+                        self.replay_response_path
+                    )
+                )
             )
 
         results = (
@@ -313,18 +231,8 @@ class UpstageOcrProvider:
         )
 
         print(
-            "==== UPSTAGE DOCUMENT "
-            "PARSE SUCCESS ====",
-            flush=True,
-        )
-        print(
-            "status_code: "
-            f"{response.status_code}",
-            flush=True,
-        )
-        print(
-            "model_version: "
-            f"{response_payload.get('modelVersion')}",
+            "==== UPSTAGE OCR "
+            f"{self.mode} SUCCESS ====",
             flush=True,
         )
         print(
@@ -343,6 +251,163 @@ class UpstageOcrProvider:
         )
 
         return results
+
+    def _call_upstage_api(
+            self,
+            *,
+            source_file: Path,
+        ) -> dict[str, Any]:
+            mime_type = (
+                mimetypes.guess_type(
+                    source_file.name
+                )[0]
+                or "application/octet-stream"
+            )
+
+            print(
+                "==== UPSTAGE OCR LIVE REQUEST ====",
+                flush=True,
+            )
+            print(
+                f"api_url: {self.api_url}",
+                flush=True,
+            )
+
+            try:
+                with source_file.open(
+                    "rb"
+                ) as file_object:
+                    response = requests.post(
+                        self.api_url,
+                        headers={
+                            "Authorization": (
+                                "Bearer "
+                                f"{self.api_key}"
+                            )
+                        },
+                        files={
+                            "document": (
+                                source_file.name,
+                                file_object,
+                                mime_type,
+                            )
+                        },
+                        data={
+                            "model": self.model,
+                        },
+                        timeout=(
+                            self.timeout_seconds
+                        ),
+                    )
+
+            except requests.RequestException as error:
+                raise RuntimeError(
+                    "Upstage OCR API 호출에 "
+                    "실패했습니다: "
+                    f"{error}"
+                ) from error
+
+            if not response.ok:
+                response_body = (
+                    response.text
+                    or ""
+                )[:2000]
+
+                raise RuntimeError(
+                    "Upstage OCR API가 "
+                    "오류를 반환했습니다: "
+                    f"status={response.status_code}, "
+                    f"body={response_body}"
+                )
+
+            try:
+                response_payload = (
+                    response.json()
+                )
+
+            except ValueError as error:
+                raise ValueError(
+                    "Upstage OCR API 응답이 "
+                    "JSON 형식이 아닙니다."
+                ) from error
+
+            if not isinstance(
+                response_payload,
+                dict,
+            ):
+                raise ValueError(
+                    "Upstage OCR API 응답은 "
+                    "JSON 객체여야 합니다."
+                )
+
+            print(
+                "status_code: "
+                f"{response.status_code}",
+                flush=True,
+            )
+
+            return response_payload
+
+
+def _read_ocr_mode(
+) -> str:
+    mode = str(
+        os.getenv(
+            "UPSTAGE_OCR_MODE"
+        )
+        or DEFAULT_UPSTAGE_OCR_MODE
+    ).strip().upper()
+
+    if mode not in {
+        "REPLAY",
+        "LIVE",
+    }:
+        raise ValueError(
+            "UPSTAGE_OCR_MODE는 "
+            "REPLAY 또는 LIVE여야 합니다: "
+            f"{mode}"
+        )
+
+    return mode
+
+def _read_replay_response(
+    *,
+    replay_response_path: Path,
+) -> dict[str, Any]:
+    if not replay_response_path.is_file():
+        raise FileNotFoundError(
+            "Upstage replay 응답 파일을 "
+            "찾을 수 없습니다: "
+            f"{replay_response_path}"
+        )
+
+    try:
+        with replay_response_path.open(
+            "r",
+            encoding="utf-8",
+        ) as file_object:
+            response_payload = json.load(
+                file_object
+            )
+
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            "Upstage replay 응답 파일이 "
+            "올바른 JSON 형식이 아닙니다: "
+            f"{replay_response_path}"
+        ) from error
+
+    if not isinstance(
+        response_payload,
+        dict,
+    ):
+        raise ValueError(
+            "Upstage replay 응답의 "
+            "최상위 값은 JSON 객체여야 합니다."
+        )
+
+    return response_payload
+
 
 def _normalize_upstage_response(
     *,
@@ -801,6 +866,9 @@ def _read_timeout_seconds(
 ) -> int:
     raw_timeout = (
         os.getenv(
+            "UPSTAGE_OCR_TIMEOUT"
+        )
+        or os.getenv(
             "UPSTAGE_REQUEST_TIMEOUT_SECONDS"
         )
         or str(
@@ -815,13 +883,13 @@ def _read_timeout_seconds(
 
     except ValueError as error:
         raise ValueError(
-            "UPSTAGE_REQUEST_TIMEOUT_SECONDS는 "
+            "UPSTAGE_OCR_TIMEOUT은 "
             "정수여야 합니다."
         ) from error
 
     if timeout_seconds < 1:
         raise ValueError(
-            "UPSTAGE_REQUEST_TIMEOUT_SECONDS는 "
+            "UPSTAGE_OCR_TIMEOUT은 "
             "1 이상이어야 합니다."
         )
 
