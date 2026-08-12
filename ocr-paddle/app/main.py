@@ -63,11 +63,39 @@ def build_ocr_engine() -> PaddleOCR:
     )
 
     engine = PaddleOCR(
-        lang=SUPPORTED_LANG,
-        **{
-            key: str(value)
-            for key, value in model_dirs.items()
-        },
+        doc_orientation_classify_model_name=(
+            "PP-LCNet_x1_0_doc_ori"
+        ),
+        doc_orientation_classify_model_dir=str(
+            MODEL_ROOT / "PP-LCNet_x1_0_doc_ori"
+        ),
+
+        doc_unwarping_model_name="UVDoc",
+        doc_unwarping_model_dir=str(
+            MODEL_ROOT / "UVDoc"
+        ),
+
+        text_detection_model_name=(
+            "PP-OCRv5_server_det"
+        ),
+        text_detection_model_dir=str(
+            MODEL_ROOT / "PP-OCRv5_server_det"
+        ),
+
+        textline_orientation_model_name=(
+            "PP-LCNet_x1_0_textline_ori"
+        ),
+        textline_orientation_model_dir=str(
+            MODEL_ROOT / "PP-LCNet_x1_0_textline_ori"
+        ),
+
+        text_recognition_model_name=(
+            "korean_PP-OCRv5_mobile_rec"
+        ),
+        text_recognition_model_dir=str(
+            MODEL_ROOT
+            / "korean_PP-OCRv5_mobile_rec"
+        ),
     )
 
     print(

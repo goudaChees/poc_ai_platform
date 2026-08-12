@@ -47,6 +47,9 @@ x-airflow-common: &airflow-common
     BOARD_DB_USER: ${POSTGRES_USER}
     BOARD_DB_PASSWORD: ${POSTGRES_PASSWORD}
 
+    PADDLE_OCR_URL: http://ocr-paddle:8000
+    PADDLE_OCR_TIMEOUT: "120"
+
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
@@ -243,6 +246,14 @@ services:
         condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
+
+  ocr-paddle:
+    image: ocr-paddle:1.0.0
+    restart: unless-stopped
+
+    environment:
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "1"
+      PADDLE_MODEL_ROOT: /opt/ocr/models
 
 
 volumes:

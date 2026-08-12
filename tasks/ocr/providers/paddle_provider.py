@@ -4,17 +4,11 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
-from paddleocr import PaddleOCR
+import requests
 
 from tasks.ocr.providers.base import (
     OcrPageResult,
 )
-
-
-_PADDLE_ENGINES: dict[
-    str,
-    PaddleOCR,
-] = {}
 
 
 class PaddleOcrProvider:
@@ -58,6 +52,21 @@ class PaddleOcrProvider:
                 "비어 있습니다."
             )
 
+        self.ocr_url = (
+            os.getenv(
+                "PADDLE_OCR_URL",
+                "http://ocr-paddle:8000",
+            )
+            .rstrip("/")
+        )
+
+        self.timeout = int(
+            os.getenv(
+                "PADDLE_OCR_TIMEOUT",
+                "120",
+            )
+        )
+
     def recognize(
         self,
         image_info: dict[str, Any],
@@ -77,10 +86,6 @@ class PaddleOcrProvider:
 
         execution_id = image_info.get(
             "execution_id"
-        )
-
-        ocr_engine = _get_ocr_engine(
-            lang=self.lang
         )
 
         results: list[
@@ -109,7 +114,7 @@ class PaddleOcrProvider:
                 flush=True,
             )
             print(
-                "PADDLE OCR START: "
+                "PADDLE OCR HTTP START: "
                 f"{image_path}",
                 flush=True,
             )
@@ -122,53 +127,100 @@ class PaddleOcrProvider:
                 flush=True,
             )
             print(
+                f"ocr_url: {self.ocr_url}",
+                flush=True,
+            )
+            print(
                 "================================",
                 flush=True,
             )
 
-            prediction = ocr_engine.predict(
-                image_path
-            )
-
-            if not prediction:
-                raise RuntimeError(
-                    "PaddleOCR 결과가 없습니다: "
-                    f"{image_path}"
-                )
-
-            ocr_data = prediction[0]
-
-            raw_texts = ocr_data.get(
-                "rec_texts",
-                [],
-            )
-
             try:
-                texts = [
-                    str(text)
-                    for text in list(
-                        raw_texts
+                with open(
+                    image_path,
+                    "rb",
+                ) as image_file:
+                    response = requests.post(
+                        f"{self.ocr_url}/ocr",
+                        files={
+                            "file": (
+                                os.path.basename(
+                                    image_path
+                                ),
+                                image_file,
+                                "application/octet-stream",
+                            )
+                        },
+                        data={
+                            "lang": self.lang,
+                        },
+                        timeout=self.timeout,
                     )
-                    if str(text).strip()
-                ]
 
-            except TypeError as error:
-                raise ValueError(
-                    "PaddleOCR rec_texts 결과를 "
-                    "목록으로 변환할 수 없습니다."
+            except requests.RequestException as error:
+                raise RuntimeError(
+                    "Paddle OCR 서비스 호출에 "
+                    "실패했습니다: "
+                    f"{error}"
                 ) from error
 
-            raw_scores = ocr_data.get(
-                "rec_scores",
+            if not response.ok:
+                raise RuntimeError(
+                    "Paddle OCR 서비스가 "
+                    "오류를 반환했습니다: "
+                    f"status={response.status_code}, "
+                    f"body={response.text}"
+                )
+
+            try:
+                response_data = (
+                    response.json()
+                )
+
+            except ValueError as error:
+                raise RuntimeError(
+                    "Paddle OCR 서비스 응답을 "
+                    "JSON으로 해석할 수 없습니다."
+                ) from error
+
+            raw_texts = response_data.get(
+                "texts",
                 [],
             )
+
+            if not isinstance(
+                raw_texts,
+                list,
+            ):
+                raise ValueError(
+                    "Paddle OCR texts 응답이 "
+                    "목록이 아닙니다."
+                )
+
+            texts = [
+                str(text)
+                for text in raw_texts
+                if str(text).strip()
+            ]
+
+            raw_scores = response_data.get(
+                "scores",
+                [],
+            )
+
+            if not isinstance(
+                raw_scores,
+                list,
+            ):
+                raise ValueError(
+                    "Paddle OCR scores 응답이 "
+                    "목록이 아닙니다."
+                )
 
             try:
                 scores = [
                     float(score)
-                    for score in list(
-                        raw_scores
-                    )
+                    for score in raw_scores
                 ]
 
             except (
@@ -176,9 +228,8 @@ class PaddleOcrProvider:
                 ValueError,
             ) as error:
                 raise ValueError(
-                    "PaddleOCR rec_scores 결과를 "
-                    "숫자 목록으로 변환할 수 "
-                    "없습니다."
+                    "Paddle OCR scores 응답을 "
+                    "숫자 목록으로 변환할 수 없습니다."
                 ) from error
 
             results.append(
@@ -199,7 +250,7 @@ class PaddleOcrProvider:
                 flush=True,
             )
             print(
-                "PADDLE OCR END: "
+                "PADDLE OCR HTTP END: "
                 f"{image_path}",
                 flush=True,
             )
@@ -213,41 +264,3 @@ class PaddleOcrProvider:
             )
 
         return results
-
-
-def _get_ocr_engine(
-    *,
-    lang: str,
-) -> PaddleOCR:
-    existing_engine = (
-        _PADDLE_ENGINES.get(
-            lang
-        )
-    )
-
-    if existing_engine is not None:
-        return existing_engine
-
-    print(
-        "==== LOAD PADDLE OCR MODEL ====",
-        flush=True,
-    )
-    print(
-        f"lang: {lang}",
-        flush=True,
-    )
-
-    created_engine = PaddleOCR(
-        lang=lang
-    )
-
-    _PADDLE_ENGINES[lang] = (
-        created_engine
-    )
-
-    print(
-        "==== PADDLE OCR READY ====",
-        flush=True,
-    )
-
-    return created_engine
