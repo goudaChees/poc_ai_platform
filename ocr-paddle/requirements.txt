@@ -1,0 +1,8 @@
+paddlepaddle==3.2.2
+paddleocr==3.7.0
+paddlex==3.7.2
+opencv-python-headless
+
+fastapi==0.139.2
+uvicorn==0.51.0
+python-multipart==0.0.32

@@ -65,7 +65,7 @@ x-airflow-common: &airflow-common
 
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16.14
     ## [Export|Import] container name 정리
     # container_name: board-postgres 
     restart: unless-stopped
@@ -137,7 +137,7 @@ services:
 
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:v0.7.2
     ##  [Export|Import] container name 정리
     # container_name: kafka-ui
 
@@ -174,11 +174,14 @@ services:
     # container_name: ai-poc-airflow-init
     restart: "no"
 
-    entrypoint: /bin/bash
+    # entrypoint: /bin/bash/
 
     command:
+      - bash
       - -c
       - |
+        set -e
+
         airflow db migrate
 
         airflow users create \
