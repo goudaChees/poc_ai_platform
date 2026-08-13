@@ -1,5 +1,5 @@
 x-airflow-common: &airflow-common
-  image: ai-poc-airflow:3.0.6-python3.11
+  image: ${DOCKER_REGISTRY}/ai-poc-airflow:3.0.6-python3.11
   user: "${AIRFLOW_UID}:${AIRFLOW_GID}"
 
   environment: &airflow-common-env
@@ -50,14 +50,22 @@ x-airflow-common: &airflow-common
     PADDLE_OCR_URL: http://ocr-paddle:8000
     PADDLE_OCR_TIMEOUT: "120"
 
+    EMBEDDING_MODEL_CACHE_DIR: /opt/airflow/embedding-models
+
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/plugins:/opt/airflow/plugins
     - ./tasks:/opt/airflow/tasks
+    - ./embedding-models:/opt/airflow/embedding-models
     # Host의 Django media 디렉터리를 Airflow 컨테이너에 공유한다.
     # Host 경로는 환경마다 다르므로 .env에서 지정한다.
     - ${MEDIA_HOST_PATH}:/opt/airflow/media
+    - ./embedding-models:/opt/airflow/embedding-models
+
+  networks:
+    - default
+    - ai-poc-network
 
   depends_on:
     postgres:
@@ -68,7 +76,7 @@ x-airflow-common: &airflow-common
 
 services:
   postgres:
-    image: postgres:16.14
+    image: ${DOCKER_REGISTRY}/postgres:16.14
     ## [Export|Import] container name 정리
     # container_name: board-postgres 
     restart: unless-stopped
@@ -78,6 +86,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
+      # 최초 초기화 시 Airflow Metadata DB 생성에 사용
+      AIRFLOW_DB_NAME: ${AIRFLOW_DB_NAME}
+      AIRFLOW_DB_USER: ${AIRFLOW_DB_USER}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+
     ports:
       # Host에서 Django Backend 등이 PostgreSQL에 접근하는 포트.
       - "${POSTGRES_PORT}:5432"
@@ -86,6 +99,7 @@ services:
       # postgres_data는 Compose 내부 논리 이름
       # 실제 Docker Volume 이름은 compose 파일 하단부 volumes의 POSTGRES_VOLUME_NAME으로 결정
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
 
     healthcheck:
       test:
@@ -99,7 +113,7 @@ services:
 
 
   kafka:
-    image: apache/kafka:4.0.0
+    image: ${DOCKER_REGISTRY}/apache-kafka:4.0.0
     ## [Export|Import] container name 정리
     # container_name: kafka
 
@@ -140,7 +154,7 @@ services:
 
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:v0.7.2
+    image: ${DOCKER_REGISTRY}/kafka-ui:v0.7.2
     ##  [Export|Import] container name 정리
     # container_name: kafka-ui
 
@@ -157,8 +171,46 @@ services:
 
     restart: unless-stopped
 
+  kafka-init:
+    image: ${DOCKER_REGISTRY}/apache-kafka:4.0.0
+    restart: "no"
+
+    depends_on:
+      - kafka
+
+    environment:
+      KAFKA_DOCUMENT_UPLOADED_TOPIC: ${KAFKA_DOCUMENT_UPLOADED_TOPIC}
+
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+
+        echo "Waiting for Kafka..."
+
+        until /opt/kafka/bin/kafka-topics.sh \
+          --bootstrap-server kafka:29092 \
+          --list >/dev/null 2>&1
+        do
+          sleep 2
+        done
+
+        echo "Creating Kafka topic if necessary..."
+
+        /opt/kafka/bin/kafka-topics.sh \
+          --bootstrap-server kafka:29092 \
+          --create \
+          --if-not-exists \
+          --topic "$${KAFKA_DOCUMENT_UPLOADED_TOPIC}" \
+          --partitions 1 \
+          --replication-factor 1
+
+        echo "Kafka topic initialization complete."
+
+
   qdrant:
-    image: qdrant/qdrant:v1.18.1
+    image: ${DOCKER_REGISTRY}/qdrant:v1.18.1
     ##  [Export|Import] container name 정리
     # container_name: qdrant
 
@@ -247,14 +299,6 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
-  ocr-paddle:
-    image: ocr-paddle:1.0.0
-    restart: unless-stopped
-
-    environment:
-      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "1"
-      PADDLE_MODEL_ROOT: /opt/ocr/models
-
 
 volumes:
   qdrant_data:
@@ -268,4 +312,8 @@ volumes:
     external: true
     name: ${POSTGRES_VOLUME_NAME:?POSTGRES_VOLUME_NAME을 설정해야 합니다}
 
+networks:
+  ai-poc-network:
+    external: true
+    name: ai-poc-network
   

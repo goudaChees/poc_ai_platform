@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import argparse
 import json
 import math
@@ -388,8 +389,15 @@ def embed_chunks(
         flush=True,
     )
 
+    embedding_model_cache_dir = os.getenv(
+        "EMBEDDING_MODEL_CACHE_DIR",
+        "/opt/airflow/embedding-models",
+    )
+
     embedding_model = TextEmbedding(
-        model_name=selected_model_name
+        model_name=selected_model_name,
+        cache_dir=embedding_model_cache_dir,
+        local_files_only=True,
     )
 
     generated_vectors = list(

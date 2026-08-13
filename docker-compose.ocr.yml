@@ -1,0 +1,16 @@
+name: ai-poc-ocr
+
+services:
+  ocr-paddle:
+    image: ${DOCKER_REGISTRY}/ocr-paddle:1.0.0
+    restart: unless-stopped
+    environment:
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "1"
+      PADDLE_MODEL_ROOT: /opt/ocr/models
+    networks:
+      - ai-poc-network
+
+networks:
+  ai-poc-network:
+    external: true
+    name: ai-poc-network

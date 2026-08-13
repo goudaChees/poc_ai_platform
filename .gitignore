@@ -18,3 +18,11 @@ tmp/
 
 # macOS
 .DS_Store
+
+# Offline artifacts
+*.tar
+*.tar.gz
+
+# AI model assets
+embedding-models/
+ocr-paddle/models/
