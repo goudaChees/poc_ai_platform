@@ -26,3 +26,6 @@ tmp/
 # AI model assets
 embedding-models/
 ocr-paddle/models/
+
+# Customer offline runtime bundles
+customer-runtime/
