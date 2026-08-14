@@ -39,7 +39,7 @@ def _resolve_media_path(path_value: str) -> Path:
 
     return resolved_path
 
-
+## Text 만 받던 소스, 삭제 예정
 def _normalize_ocr_lines(
     texts: list[Any],
 ) -> str:
@@ -66,6 +66,162 @@ def _normalize_ocr_lines(
         normalized_lines
     )
 
+# 각 block 들을 이어서 보이게 해주는
+# block 0 = "ABC", block 1 = "DEF", block 2 = "GHI"  == ABC\nDEF\nGHI
+def _build_page_text_from_blocks(
+    blocks: list[Any],
+    page_number: int,
+) -> tuple[
+    str,
+    list[dict[str, Any]],
+]:
+    text_parts: list[str] = []
+
+    block_ranges: list[
+        dict[str, Any]
+    ] = []
+
+    current_char = 0
+
+    for raw_block in blocks:
+        if not isinstance(
+            raw_block,
+            dict,
+        ):
+            continue
+
+        block_text = " ".join(
+            str(
+                raw_block.get(
+                    "text",
+                    ""
+                )
+            ).split()
+        )
+
+        if not block_text:
+            continue
+
+        raw_bbox = raw_block.get(
+            "bbox"
+        )
+
+        if (
+            not isinstance(
+                raw_bbox,
+                list,
+            )
+            or len(raw_bbox) != 4
+        ):
+            raise ValueError(
+                "OCR block bbox가 "
+                "올바르지 않습니다: "
+                f"page_number={page_number}"
+            )
+
+        block_index = int(
+            raw_block.get(
+                "index",
+                len(block_ranges),
+            )
+        )
+
+        if text_parts:
+            text_parts.append(
+                "\n"
+            )
+            current_char += 1
+
+        start_char = (
+            current_char
+        )
+
+        text_parts.append(
+            block_text
+        )
+
+        current_char += len(
+            block_text
+        )
+
+        end_char = (
+            current_char
+        )
+
+        block_ranges.append(
+            {
+                "block_index": (
+                    block_index
+                ),
+                "start_char": (
+                    start_char
+                ),
+                "end_char": (
+                    end_char
+                ),
+                "bbox": [
+                    int(value)
+                    for value
+                    in raw_bbox
+                ],
+            }
+        )
+
+    return (
+        "".join(
+            text_parts
+        ),
+        block_ranges,
+    )
+
+def _resolve_chunk_blocks(
+    *,
+    chunk_start: int,
+    chunk_end: int,
+    block_ranges: list[dict[str, Any]],
+) -> tuple[
+    list[int],
+    list[list[int]],
+]:
+    block_indexes: list[int] = []
+    bbox_refs: list[list[int]] = []
+
+    for block_range in block_ranges:
+        block_start = int(
+            block_range["start_char"]
+        )
+
+        block_end = int(
+            block_range["end_char"]
+        )
+
+        # 범위가 겹치지 않으면 제외
+        if (
+            block_end <= chunk_start
+            or block_start >= chunk_end
+        ):
+            continue
+
+        block_indexes.append(
+            int(
+                block_range[
+                    "block_index"
+                ]
+            )
+        )
+
+        bbox_refs.append(
+            [
+                int(value)
+                for value
+                in block_range["bbox"]
+            ]
+        )
+
+    return (
+        block_indexes,
+        bbox_refs,
+    )
 
 def _find_chunk_end(
     text: str,
@@ -288,22 +444,26 @@ def chunk_document(
             )
         )
 
-        texts = page.get(
-            "texts",
+        raw_blocks = page.get(
+            "blocks",
             []
         )
 
-        if isinstance(texts, str):
-            texts = [texts]
-
-        if not isinstance(texts, list):
+        if not isinstance(
+            raw_blocks,
+            list,
+        ):
             raise ValueError(
-                "OCR 페이지의 texts는 목록이어야 합니다: "
+                "OCR 페이지의 blocks는 "
+                "목록이어야 합니다: "
                 f"page_number={page_number}"
             )
 
-        page_text = _normalize_ocr_lines(
-            texts
+        page_text, block_ranges = (
+            _build_page_text_from_blocks(
+                blocks=raw_blocks,
+                page_number=page_number,
+            )
         )
 
         if not page_text:
@@ -323,6 +483,18 @@ def chunk_document(
         for page_chunk_index, page_chunk in enumerate(
             page_chunks
         ):
+            block_indexes, bbox_refs = (
+                _resolve_chunk_blocks(
+                    chunk_start=(
+                        page_chunk["start_char"]
+                    ),
+                    chunk_end=(
+                        page_chunk["end_char"]
+                    ),
+                    block_ranges=block_ranges,
+                )
+            )
+
             chunk_id = (
                 f"{document_id}-"
                 f"{global_chunk_index:06d}"
@@ -346,6 +518,12 @@ def chunk_document(
                         page_chunk["char_count"]
                     ),
                     "text": page_chunk["text"],
+                    "block_indexes": (
+                        block_indexes
+                    ),
+                    "bbox_refs": (
+                        bbox_refs
+                    ),
                 }
             )
 
@@ -354,7 +532,7 @@ def chunk_document(
     if not chunks:
         raise ValueError(
             "생성된 Chunk가 없습니다. "
-            "OCR 결과의 texts 내용을 확인하세요."
+            "OCR 결과의 blocks 내용을 확인하세요."
         )
 
     output_dir = (
@@ -443,7 +621,7 @@ def chunk_document(
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "PaddleOCR result.json을 "
+            "OCR result.json을 "
             "RAG 검색용 Chunk로 변환합니다."
         )
     )

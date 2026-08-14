@@ -491,6 +491,20 @@ def embed_chunks(
                         "page_chunk_index"
                     )
                 ),
+                "start_char": chunk.get(
+                    "start_char"
+                ),
+                "end_char": chunk.get(
+                    "end_char"
+                ),
+                "block_indexes": chunk.get(
+                    "block_indexes",
+                    [],
+                ),
+                "bbox_refs": chunk.get(
+                    "bbox_refs",
+                    [],
+                ),
                 "text": chunk["text"],
                 "model_name": (
                     selected_model_name

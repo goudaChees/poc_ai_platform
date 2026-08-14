@@ -8,9 +8,10 @@ from typing import Any
 import requests
 
 from tasks.ocr.providers.base import (
-    AiOcrStandardBlock,
-    AiOcrStandardImage,
-    AiOcrStandardResult,
+    OcrPageResult,
+    OcrStandardBlock,
+    OcrStandardImageInfo,
+    OcrStandardResult,
 )
 
 
@@ -92,22 +93,76 @@ class HttpOcrRuntimeAdapter:
     def recognize(
         self,
         image_info: dict[str, Any],
-    ) -> AiOcrStandardResult:
-        source_file_path = str(
-            image_info.get(
-                "source_file_path"
-            )
-            or ""
-        ).strip()
+    ) -> list[OcrPageResult]:
+        raw_image_files = image_info.get(
+            "image_files"
+        )
 
-        if not source_file_path:
+        if not isinstance(
+            raw_image_files,
+            list,
+        ) or not raw_image_files:
             raise ValueError(
                 "HTTP OCR Runtime 실행에 필요한 "
-                "source_file_path가 없습니다."
+                "image_files가 없습니다."
             )
 
+        results: list[
+            OcrPageResult
+        ] = []
+
+        for (
+            page_number,
+            raw_image_path,
+        ) in enumerate(
+            raw_image_files,
+            start=1,
+        ):
+            image_path = str(
+                raw_image_path
+            ).strip()
+
+            if not image_path:
+                raise ValueError(
+                    "OCR 페이지 이미지 경로가 "
+                    "비어 있습니다: "
+                    f"page_number={page_number}"
+                )
+
+            standard_result = (
+                self._recognize_image(
+                    image_path=image_path,
+                )
+            )
+
+            page_result = (
+                _build_page_result(
+                    standard_result=(
+                        standard_result
+                    ),
+                    page_number=(
+                        page_number
+                    ),
+                    image_path=(
+                        image_path
+                    ),
+                )
+            )
+
+            results.append(
+                page_result
+            )
+
+        return results
+    
+
+    def _recognize_image(
+        self,
+        *,
+        image_path: str,
+    ) -> OcrStandardResult:
         source_file = Path(
-            source_file_path
+            image_path
         )
 
         if not source_file.is_file():
@@ -195,7 +250,7 @@ class HttpOcrRuntimeAdapter:
             ) from error
 
         result = (
-            _normalize_ai_ocr_standard_result(
+            _normalize_ocr_standard_result(
                 response_payload
             )
         )
@@ -230,11 +285,12 @@ class HttpOcrRuntimeAdapter:
         )
 
         return result
+    
 
 
-def _normalize_ai_ocr_standard_result(
+def _normalize_ocr_standard_result(
     response_payload: Any,
-) -> AiOcrStandardResult:
+) -> OcrStandardResult:
 
     if not isinstance(
         response_payload,
@@ -320,7 +376,7 @@ def _normalize_ai_ocr_standard_result(
         )
 
     blocks: list[
-        AiOcrStandardBlock
+        OcrStandardBlock
     ] = []
 
     for raw_block in raw_blocks:
@@ -344,7 +400,7 @@ def _normalize_ai_ocr_standard_result(
 
 def _normalize_image(
     raw_image: Any,
-) -> AiOcrStandardImage:
+) -> OcrStandardImageInfo:
 
     if not isinstance(
         raw_image,
@@ -372,7 +428,7 @@ def _normalize_image(
 
 def _normalize_block(
     raw_block: Any,
-) -> AiOcrStandardBlock:
+) -> OcrStandardBlock:
 
     if not isinstance(
         raw_block,
@@ -552,3 +608,59 @@ def _require_confidence(
         )
 
     return confidence
+
+def _build_page_result(
+    *,
+    standard_result: OcrStandardResult,
+    page_number: int,
+    image_path: str,
+) -> OcrPageResult:
+    blocks: list[
+        OcrStandardBlock
+    ] = []
+
+    for block in standard_result[
+        "blocks"
+    ]:
+        blocks.append(
+            {
+                "index": block["index"],
+                "text": block["text"],
+                "confidence": (
+                    block["confidence"]
+                ),
+                "bbox": block["bbox"],
+                "page": page_number,
+            }
+        )
+
+    return {
+        "schema_version": (
+            standard_result[
+                "schema_version"
+            ]
+        ),
+        "status": (
+            standard_result["status"]
+        ),
+        "engine_key": (
+            standard_result[
+                "engine_key"
+            ]
+        ),
+        "version": (
+            standard_result["version"]
+        ),
+        "device": (
+            standard_result["device"]
+        ),
+        "image": (
+            standard_result["image"]
+        ),
+        "text": (
+            standard_result["text"]
+        ),
+        "blocks": blocks,
+        "page_number": page_number,
+        "image_path": image_path,
+    }

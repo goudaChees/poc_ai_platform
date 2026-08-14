@@ -384,6 +384,20 @@ def _iter_points(
                 "page_chunk_index": record.get(
                     "page_chunk_index"
                 ),
+                "start_char": record.get(
+                    "start_char"
+                ),
+                "end_char": record.get(
+                    "end_char"
+                ),
+                "block_indexes": record.get(
+                    "block_indexes",
+                    [],
+                ),
+                "bbox_refs": record.get(
+                    "bbox_refs",
+                    [],
+                ),
                 "text": record["text"],
                 "model_name": record[
                     "model_name"
