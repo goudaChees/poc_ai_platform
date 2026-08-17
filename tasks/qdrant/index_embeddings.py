@@ -12,7 +12,7 @@ from typing import Any, Iterator
 from qdrant_client import QdrantClient
 from qdrant_client import models
 
-from tasks.common.constants import OCR_MEDIA_ROOT
+from tasks.common.constants import OCR_WORK_ROOT
 
 
 DEFAULT_COLLECTION_NAME = "document_chunks"
@@ -20,15 +20,15 @@ DEFAULT_BATCH_SIZE = 64
 DEFAULT_TIMEOUT_SECONDS = 30
 
 
-def _resolve_media_path(
+def _resolve_work_path(
     path_value: str,
 ) -> Path:
     """
-    OCR_MEDIA_ROOT 내부의 상대 경로와 절대 경로를 지원한다.
-    MEDIA_ROOT 외부 경로 접근은 허용하지 않는다.
+    OCR_WORK_ROOT 내부의 상대 경로와 절대 경로를 지원한다.
+    OCR_WORK_ROOT 외부 경로 접근은 허용하지 않는다.
     """
-    media_root = Path(
-        OCR_MEDIA_ROOT
+    work_root = Path(
+        OCR_WORK_ROOT
     ).resolve()
 
     requested_path = Path(
@@ -39,17 +39,17 @@ def _resolve_media_path(
         resolved_path = requested_path.resolve()
     else:
         resolved_path = (
-            media_root
+            work_root
             / requested_path
         ).resolve()
 
     if (
-        resolved_path != media_root
-        and media_root
+        resolved_path != work_root
+        and work_root
         not in resolved_path.parents
     ):
         raise ValueError(
-            "OCR_MEDIA_ROOT 외부 경로에는 "
+            "OCR_WORK_ROOT 외부 경로에는 "
             "접근할 수 없습니다: "
             f"{path_value}"
         )
@@ -111,7 +111,7 @@ def _build_point_id(
 def _load_manifest(
     manifest_path: str,
 ) -> tuple[dict[str, Any], Path]:
-    manifest_file = _resolve_media_path(
+    manifest_file = _resolve_work_path(
         manifest_path
     )
 
@@ -662,7 +662,7 @@ def index_embeddings(
         manifest["embedding_path"]
     )
 
-    embedding_file = _resolve_media_path(
+    embedding_file = _resolve_work_path(
         embedding_path
     )
 
@@ -847,7 +847,7 @@ def main() -> None:
         "--manifest-path",
         required=True,
         help=(
-            "OCR_MEDIA_ROOT 기준 "
+            "OCR_WORK_ROOT 기준 "
             "embedding manifest 상대 경로"
         ),
     )

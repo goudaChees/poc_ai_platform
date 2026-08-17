@@ -5,35 +5,46 @@ import json
 from pathlib import Path
 from typing import Any
 
-from tasks.common.constants import OCR_MEDIA_ROOT
+from tasks.common.constants import OCR_WORK_ROOT, OCR_RESULTS_ROOT
 
 
 DEFAULT_CHUNK_SIZE = 800
 DEFAULT_CHUNK_OVERLAP = 120
 
 
-def _resolve_media_path(path_value: str) -> Path:
+def _resolve_ocr_result_path(
+    path_value: str,
+) -> Path:
 
     # 상대 경로와 절대 경로를 모두 지원하되,
-    # OCR_MEDIA_ROOT 외부 경로 접근은 막는다.
+    # OCR_RESULTS_ROOT 외부 경로 접근은 막는다.
 
-    media_root = Path(OCR_MEDIA_ROOT).resolve()
-    requested_path = Path(path_value)
+    results_root = Path(
+        OCR_RESULTS_ROOT
+    ).resolve()
+
+    requested_path = Path(
+        path_value
+    )
 
     if requested_path.is_absolute():
-        resolved_path = requested_path.resolve()
+        resolved_path = (
+            requested_path.resolve()
+        )
     else:
         resolved_path = (
-            media_root
+            results_root
             / requested_path
         ).resolve()
 
     if (
-        resolved_path != media_root
-        and media_root not in resolved_path.parents
+        resolved_path != results_root
+        and results_root
+        not in resolved_path.parents
     ):
         raise ValueError(
-            "MEDIA_ROOT 외부 경로에는 접근할 수 없습니다: "
+            "OCR_RESULTS_ROOT 외부 "
+            "경로에는 접근할 수 없습니다: "
             f"{path_value}"
         )
 
@@ -352,7 +363,7 @@ def chunk_document(
             "result_path가 없습니다."
         )
 
-    result_file = _resolve_media_path(
+    result_file = _resolve_ocr_result_path(
         str(result_path)
     )
 
@@ -536,9 +547,14 @@ def chunk_document(
         )
 
     output_dir = (
-        Path(OCR_MEDIA_ROOT)
-        / "chunk_results"
-        / str(document_id)
+        Path(OCR_WORK_ROOT)
+        / str(
+            document_id
+        )
+        / str(
+            execution_id
+        )
+        / "chunking"
     )
 
     output_dir.mkdir(
@@ -552,8 +568,13 @@ def chunk_document(
     )
 
     output_relative_path = (
-        Path("chunk_results")
-        / str(document_id)
+        Path(
+            str(document_id)
+        )
+        / str(
+            execution_id
+        )
+        / "chunking"
         / "chunks.json"
     ).as_posix()
 
@@ -630,8 +651,8 @@ def main() -> None:
         "--result-path",
         required=True,
         help=(
-            "OCR_MEDIA_ROOT 기준 상대 경로 또는 "
-            "MEDIA_ROOT 내부 절대 경로"
+            "OCR_RESULTS_ROOT 기준 상대 경로 또는 "
+            "OCR_RESULTS_ROOT 내부 절대 경로"
         ),
     )
 

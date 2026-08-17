@@ -5,9 +5,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from tasks.common.constants import (
-    OCR_MEDIA_ROOT,
-)
+from tasks.common.constants import OCR_RESULTS_ROOT
+
 from tasks.ocr.providers.base import (
     OcrPageResult,
 )
@@ -58,14 +57,16 @@ def write_ocr_result(
     ]
 
     result_dir = (
-        Path(
-            OCR_MEDIA_ROOT
-        )
-        / "ocr_results"
-        / str(
-            document_id
-        )
+    Path(
+        OCR_RESULTS_ROOT
     )
+    / str(
+        document_id
+    )
+    / str(
+        execution_id
+    )
+)
 
     result_dir.mkdir(
         parents=True,
@@ -84,10 +85,12 @@ def write_ocr_result(
 
     result_relative_path = (
         Path(
-            "ocr_results"
+            str(
+                document_id
+            )
         )
         / str(
-            document_id
+            execution_id
         )
         / "result.json"
     )

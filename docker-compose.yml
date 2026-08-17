@@ -29,6 +29,11 @@ x-airflow-common: &airflow-common
     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     OCR_MEDIA_ROOT: /opt/airflow/media
 
+    # MEDIA 경로 재정의 
+    OCR_FILES_ROOT: /opt/airflow/ocrfiles
+    OCR_RESULTS_ROOT: /opt/airflow/ocrresults
+    OCR_WORK_ROOT: /opt/airflow/ocrwork
+
     OCR_PROVIDER: ${OCR_PROVIDER:-paddle}
 
     UPSTAGE_OCR_MODE: ${UPSTAGE_OCR_MODE:-REPLAY}
@@ -61,7 +66,10 @@ x-airflow-common: &airflow-common
     # Host의 Django media 디렉터리를 Airflow 컨테이너에 공유한다.
     # Host 경로는 환경마다 다르므로 .env에서 지정한다.
     - ${MEDIA_HOST_PATH}:/opt/airflow/media
-    - ./embedding-models:/opt/airflow/embedding-models
+    # 신규
+    - ${OCR_FILES_HOST_PATH}:/opt/airflow/ocrfiles
+    - ${OCR_RESULTS_HOST_PATH}:/opt/airflow/ocrresults    
+    - ${OCR_WORK_HOST_PATH}:/opt/airflow/ocrwork
 
   networks:
     - default

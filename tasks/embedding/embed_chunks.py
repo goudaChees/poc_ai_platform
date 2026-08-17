@@ -9,7 +9,7 @@ from typing import Any
 
 from fastembed import TextEmbedding
 
-from tasks.common.constants import OCR_MEDIA_ROOT
+from tasks.common.constants import OCR_WORK_ROOT
 
 
 DEFAULT_BATCH_SIZE = 8
@@ -22,15 +22,15 @@ PREFERRED_MODEL_NAMES = (
 )
 
 
-def _resolve_media_path(
+def _resolve_work_path(
     path_value: str,
 ) -> Path:
     """
-    OCR_MEDIA_ROOT 내부의 상대 경로와 절대 경로를 지원한다.
-    MEDIA_ROOT 외부 경로 접근은 허용하지 않는다.
+    OCR_WORK_ROOT 내부의 상대 경로와 절대 경로를 지원한다.
+    OCR_WORK_ROOT 외부 경로 접근은 허용하지 않는다.
     """
-    media_root = Path(
-        OCR_MEDIA_ROOT
+    work_root = Path(
+        OCR_WORK_ROOT
     ).resolve()
 
     requested_path = Path(
@@ -43,17 +43,17 @@ def _resolve_media_path(
         )
     else:
         resolved_path = (
-            media_root
+            work_root
             / requested_path
         ).resolve()
 
     if (
-        resolved_path != media_root
-        and media_root
+        resolved_path != work_root
+        and work_root
         not in resolved_path.parents
     ):
         raise ValueError(
-            "OCR_MEDIA_ROOT 외부 경로에는 "
+            "OCR_WORK_ROOT 외부 경로에는 "
             "접근할 수 없습니다: "
             f"{path_value}"
         )
@@ -200,7 +200,7 @@ def embed_chunks(
             "chunk_path가 없습니다."
         )
 
-    chunk_file = _resolve_media_path(
+    chunk_file = _resolve_work_path(
         str(chunk_path)
     )
 
@@ -419,9 +419,14 @@ def embed_chunks(
         )
 
     output_dir = (
-        Path(OCR_MEDIA_ROOT)
-        / "embedding_results"
-        / str(document_id)
+        Path(OCR_WORK_ROOT)
+        / str(
+            document_id
+        )
+        / str(
+            execution_id
+        )
+        / "embedding"
     )
 
     output_dir.mkdir(
@@ -538,14 +543,24 @@ def embed_chunks(
         )
 
     embedding_relative_path = (
-        Path("embedding_results")
-        / str(document_id)
+        Path(
+            str(document_id)
+        )
+        / str(
+            execution_id
+        )
+        / "embedding"
         / "embeddings.jsonl"
     ).as_posix()
 
     manifest_relative_path = (
-        Path("embedding_results")
-        / str(document_id)
+        Path(
+            str(document_id)
+        )
+        / str(
+            execution_id
+        )
+        / "embedding"
         / "manifest.json"
     ).as_posix()
 
@@ -671,7 +686,7 @@ def main() -> None:
     parser.add_argument(
         "--chunk-path",
         help=(
-            "OCR_MEDIA_ROOT 기준 "
+            "OCR_WORK_ROOT 기준 "
             "chunks.json 상대 경로"
         ),
     )

@@ -2,7 +2,7 @@ from __future__ import annotations
 import os
 import fitz
 from typing import Any
-from tasks.common.constants import OCR_MEDIA_ROOT
+from tasks.common.constants import OCR_WORK_ROOT
 
 SUPPORTED_IMAGE_TYPES = {
     "jpg",
@@ -58,11 +58,15 @@ def _convert_pdf(file_info: dict[str, Any],) -> dict[str, Any]:
         )
 
     output_dir = os.path.join(
-        OCR_MEDIA_ROOT,
-        "ocr_images",
+        OCR_WORK_ROOT,
         str(
             document_id
         ),
+        str(
+            execution_id
+        ),
+        "prepare",
+        "images",
     )
 
     os.makedirs(

@@ -1,5 +1,5 @@
 import os
-from tasks.common.constants import OCR_MEDIA_ROOT
+from tasks.common.constants import OCR_FILES_ROOT
 
 def check_file(conf):
 
@@ -12,7 +12,7 @@ def check_file(conf):
     print("file_type")
 
     full_path = os.path.join(
-        OCR_MEDIA_ROOT,
+        OCR_FILES_ROOT,
         file_path,
         saved_name
     )

@@ -9,17 +9,17 @@ from typing import Any
 from qdrant_client import QdrantClient
 from qdrant_client import models
 
-from tasks.common.constants import OCR_MEDIA_ROOT
+from tasks.common.constants import OCR_WORK_ROOT
 
 DEFAULT_COLLECTION_NAME = "document_chunks"
 DEFAULT_TIMEOUT_SECONDS = 30
 
 
-def _resolve_media_path(
+def _resolve_work_path(
     path_value: str,
 ) -> Path:
-    media_root = Path(
-        OCR_MEDIA_ROOT
+    work_root = Path(
+        OCR_WORK_ROOT
     ).resolve()
 
     requested_path = Path(
@@ -30,16 +30,16 @@ def _resolve_media_path(
         resolved_path = requested_path.resolve()
     else:
         resolved_path = (
-            media_root
+            work_root
             / requested_path
         ).resolve()
 
     if (
-        resolved_path != media_root
-        and media_root not in resolved_path.parents
+        resolved_path != work_root
+        and work_root not in resolved_path.parents
     ):
         raise ValueError(
-            "OCR_MEDIA_ROOT 외부 경로에는 "
+            "OCR_WORK_ROOT 외부 경로에는 "
             "접근할 수 없습니다: "
             f"{path_value}"
         )
@@ -383,7 +383,7 @@ def validate_rag_index(
 def _load_manifest_index_info(
     manifest_path: str,
 ) -> dict[str, Any]:
-    manifest_file = _resolve_media_path(
+    manifest_file = _resolve_work_path(
         manifest_path
     )
 
