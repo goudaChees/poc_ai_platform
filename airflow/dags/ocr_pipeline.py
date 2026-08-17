@@ -110,12 +110,31 @@ def ocr_pipeline():
         stage_options = (execution_plan.get("stage_options") or {})
         ocr_options = (stage_options.get("OCR") or {})
 
-        provider_code = str(
+        raw_provider_code = (
             ocr_options.get(
-                "provider",
-                "PADDLE",
+                "provider"
             )
-        ).strip().upper()
+        )
+
+        if not isinstance(
+            raw_provider_code,
+            str,
+        ):
+            raise ValueError(
+                "OCR provider 설정이 없습니다."
+            )
+
+        provider_code = (
+            raw_provider_code
+            .strip()
+            .upper()
+        )
+
+        if not provider_code:
+            raise ValueError(
+                "OCR provider 설정이 "
+                "비어 있습니다."
+            )
 
         provider_options = (
             ocr_options.get("config")

@@ -56,7 +56,7 @@ def run_ocr(
     )
 
     if not isinstance(
-        provider_code,
+        selected_provider_code,
         str,
     ):
         raise ValueError(

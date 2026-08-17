@@ -10,6 +10,15 @@ services:
     networks:
       - ai-poc-network
 
+  ocr-tesseract:
+    image: ${DOCKER_REGISTRY}/ocr-tesseract:1.0.0
+    restart: unless-stopped
+    environment:
+      OCR_LANG: "kor+eng"
+      OCR_PSM: "6"
+    networks:
+      - ai-poc-network
+
 networks:
   ai-poc-network:
     external: true

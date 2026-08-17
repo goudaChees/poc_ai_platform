@@ -38,14 +38,9 @@ class OcrPageResult(OcrStandardResult):
 
 
 class OcrProvider(Protocol):
-    provider_code: str
-
     def recognize(
         self,
-        image_info: dict[
-            str,
-            Any,
-        ],
+        image_info: dict[str, Any,],
     ) -> list[
         OcrPageResult
     ]:
