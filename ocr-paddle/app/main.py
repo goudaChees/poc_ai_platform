@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import os
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import Any
 
+import cv2
+import paddle
 from fastapi import (
     FastAPI,
     File,
@@ -14,6 +18,11 @@ from fastapi import (
 )
 from paddleocr import PaddleOCR
 
+
+SCHEMA_VERSION = "1.0"
+ENGINE_KEY = "paddle"
+DISPLAY_NAME = "PaddleOCR"
+RUNTIME_VERSION = "1.1.0"
 
 MODEL_ROOT = Path(
     os.getenv(
@@ -25,6 +34,29 @@ MODEL_ROOT = Path(
 SUPPORTED_LANG = "korean"
 
 _engine: PaddleOCR | None = None
+
+
+def get_engine_version() -> str:
+    return version(
+        "paddleocr"
+    )
+
+
+def get_gpu_available() -> bool:
+    try:
+        return (
+            paddle.device.cuda.device_count()
+            > 0
+        )
+    except Exception:
+        return False
+
+
+def get_device() -> str:
+    if get_gpu_available():
+        return "GPU"
+
+    return "CPU"
 
 
 def build_ocr_engine() -> PaddleOCR:
@@ -54,7 +86,9 @@ def build_ocr_engine() -> PaddleOCR:
     if missing_models:
         raise RuntimeError(
             "Paddle OCR 모델 디렉터리가 없습니다: "
-            + ", ".join(missing_models)
+            + ", ".join(
+                missing_models
+            )
         )
 
     print(
@@ -67,26 +101,30 @@ def build_ocr_engine() -> PaddleOCR:
             "PP-LCNet_x1_0_doc_ori"
         ),
         doc_orientation_classify_model_dir=str(
-            MODEL_ROOT / "PP-LCNet_x1_0_doc_ori"
+            MODEL_ROOT
+            / "PP-LCNet_x1_0_doc_ori"
         ),
 
         doc_unwarping_model_name="UVDoc",
         doc_unwarping_model_dir=str(
-            MODEL_ROOT / "UVDoc"
+            MODEL_ROOT
+            / "UVDoc"
         ),
 
         text_detection_model_name=(
             "PP-OCRv5_server_det"
         ),
         text_detection_model_dir=str(
-            MODEL_ROOT / "PP-OCRv5_server_det"
+            MODEL_ROOT
+            / "PP-OCRv5_server_det"
         ),
 
         textline_orientation_model_name=(
             "PP-LCNet_x1_0_textline_ori"
         ),
         textline_orientation_model_dir=str(
-            MODEL_ROOT / "PP-LCNet_x1_0_textline_ori"
+            MODEL_ROOT
+            / "PP-LCNet_x1_0_textline_ori"
         ),
 
         text_recognition_model_name=(
@@ -106,6 +144,95 @@ def build_ocr_engine() -> PaddleOCR:
     return engine
 
 
+def build_blocks(
+    ocr_data: Any,
+) -> list[dict[str, object]]:
+    raw_texts = list(
+        ocr_data.get(
+            "rec_texts",
+            [],
+        )
+    )
+
+    raw_scores = list(
+        ocr_data.get(
+            "rec_scores",
+            [],
+        )
+    )
+
+    raw_boxes = list(
+        ocr_data.get(
+            "rec_boxes",
+            [],
+        )
+    )
+
+    if not (
+        len(raw_texts)
+        == len(raw_scores)
+        == len(raw_boxes)
+    ):
+        raise RuntimeError(
+            "PaddleOCR 결과 길이가 "
+            "일치하지 않습니다: "
+            f"texts={len(raw_texts)}, "
+            f"scores={len(raw_scores)}, "
+            f"boxes={len(raw_boxes)}"
+        )
+
+    blocks: list[
+        dict[str, object]
+    ] = []
+
+    for (
+        raw_text,
+        raw_score,
+        raw_box,
+    ) in zip(
+        raw_texts,
+        raw_scores,
+        raw_boxes,
+        strict=True,
+    ):
+        text = str(
+            raw_text
+        ).strip()
+
+        if not text:
+            continue
+
+        bbox = [
+            int(value)
+            for value in list(
+                raw_box
+            )
+        ]
+
+        if len(bbox) != 4:
+            raise RuntimeError(
+                "PaddleOCR bbox 형식이 "
+                "올바르지 않습니다: "
+                f"{bbox}"
+            )
+
+        blocks.append(
+            {
+                "index": len(
+                    blocks
+                ),
+                "text": text,
+                "confidence": float(
+                    raw_score
+                ),
+                "bbox": bbox,
+                "page": 1,
+            }
+        )
+
+    return blocks
+
+
 @asynccontextmanager
 async def lifespan(
     app: FastAPI,
@@ -121,55 +248,112 @@ async def lifespan(
 
 app = FastAPI(
     title="OCR Paddle Service",
-    version="1.0.0",
+    version=RUNTIME_VERSION,
     lifespan=lifespan,
 )
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, object]:
     if _engine is None:
         raise HTTPException(
             status_code=503,
-            detail="OCR engine is not ready.",
+            detail=(
+                "OCR engine is not ready."
+            ),
         )
 
     return {
-        "status": "ok",
-        "provider": "PADDLE",
+        "status": "READY",
+        "engine_key": ENGINE_KEY,
+        "version": (
+            get_engine_version()
+        ),
+        "device": get_device(),
+        "gpu_available": (
+            get_gpu_available()
+        ),
+    }
+
+
+@app.get("/metadata")
+def metadata() -> dict[str, object]:
+    return {
+        "schema_version": (
+            SCHEMA_VERSION
+        ),
+        "engine_key": ENGINE_KEY,
+        "display_name": DISPLAY_NAME,
+        "version": (
+            get_engine_version()
+        ),
+        "runtime_version": (
+            RUNTIME_VERSION
+        ),
+        "runtime_type": "HTTP_API",
+        "device": get_device(),
+        "gpu_available": (
+            get_gpu_available()
+        ),
+        "languages": [
+            SUPPORTED_LANG,
+        ],
+        "api": {
+            "health": "/health",
+            "metadata": "/metadata",
+            "ocr": "/ocr",
+        },
     }
 
 
 @app.post("/ocr")
 async def recognize(
     file: UploadFile = File(...),
-    lang: str = Form(SUPPORTED_LANG),
+    lang: str = Form(
+        SUPPORTED_LANG
+    ),
 ) -> dict[str, object]:
     if _engine is None:
         raise HTTPException(
             status_code=503,
-            detail="OCR engine is not ready.",
+            detail=(
+                "OCR engine is not ready."
+            ),
         )
 
-    normalized_lang = lang.strip().lower()
+    normalized_lang = (
+        lang
+        .strip()
+        .lower()
+    )
 
-    if normalized_lang != SUPPORTED_LANG:
+    if (
+        normalized_lang
+        != SUPPORTED_LANG
+    ):
         raise HTTPException(
             status_code=400,
             detail=(
                 "현재 ocr-paddle 이미지에서 "
-                f"지원하는 lang은 {SUPPORTED_LANG}입니다."
+                "지원하는 lang은 "
+                f"{SUPPORTED_LANG}입니다."
             ),
         )
 
-    filename = file.filename or "image"
+    filename = (
+        file.filename
+        or "image"
+    )
 
     suffix = (
         Path(filename).suffix
         or ".img"
     )
 
-    temporary_path: str | None = None
+    temporary_path: (
+        str
+        | None
+    ) = None
 
     try:
         with NamedTemporaryFile(
@@ -192,6 +376,23 @@ async def recognize(
                     chunk
                 )
 
+        image = cv2.imread(
+            temporary_path
+        )
+
+        if image is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "이미지 파일을 "
+                    "읽을 수 없습니다."
+                ),
+            )
+
+        height, width = (
+            image.shape[:2]
+        )
+
         print(
             "==============================",
             flush=True,
@@ -213,49 +414,76 @@ async def recognize(
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    "PaddleOCR 결과가 없습니다."
+                    "PaddleOCR 결과가 "
+                    "없습니다."
                 ),
             )
 
-        ocr_data = prediction[0]
-
-        raw_texts = ocr_data.get(
-            "rec_texts",
-            [],
+        ocr_data = (
+            prediction[0]
         )
 
-        texts = [
-            str(text)
-            for text in list(raw_texts)
-            if str(text).strip()
-        ]
-
-        raw_scores = ocr_data.get(
-            "rec_scores",
-            [],
+        blocks = build_blocks(
+            ocr_data
         )
 
-        scores = [
-            float(score)
-            for score in list(
-                raw_scores
+        full_text = "\n".join(
+            str(
+                block["text"]
             )
-        ]
+            for block in blocks
+        )
 
         print(
             f"PADDLE OCR END: {filename}",
             flush=True,
         )
         print(
-            f"text_count: {len(texts)}",
+            f"block_count: {len(blocks)}",
             flush=True,
         )
 
         return {
-            "provider": "PADDLE",
-            "texts": texts,
-            "scores": scores,
+            "schema_version": (
+                SCHEMA_VERSION
+            ),
+            "status": "SUCCESS",
+            "engine_key": (
+                ENGINE_KEY
+            ),
+            "version": (
+                get_engine_version()
+            ),
+            "device": get_device(),
+            "image": {
+                "width": int(
+                    width
+                ),
+                "height": int(
+                    height
+                ),
+            },
+            "text": full_text,
+            "blocks": blocks,
         }
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        print(
+            "==== PADDLE OCR ERROR ====",
+            flush=True,
+        )
+        print(
+            repr(exc),
+            flush=True,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
 
     finally:
         await file.close()

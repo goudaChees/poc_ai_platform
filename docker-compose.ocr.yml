@@ -2,7 +2,7 @@ name: ai-poc-ocr
 
 services:
   ocr-paddle:
-    image: ${DOCKER_REGISTRY}/ocr-paddle:1.0.0
+    image: ${DOCKER_REGISTRY}/ocr-paddle:1.1.0-internal
     restart: unless-stopped
     environment:
       PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "1"
